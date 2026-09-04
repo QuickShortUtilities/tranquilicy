@@ -5,7 +5,18 @@
 // `python scripts/check_page.py` guards against exactly that.
 import html from './index.html';
 
-const GPU_BACKEND = 'https://clearly-gather-deviation-shorter.trycloudflare.com';
+// Fallback only. The live value should come from the Worker variable
+// GPU_BACKEND (Cloudflare dashboard -> Workers -> Settings -> Variables), so a
+// new tunnel hostname is a one-field edit that applies instantly, instead of a
+// code change + commit + redeploy. Quick tunnels get a fresh random hostname
+// every time cloudflared restarts, so this WILL change; see
+// scripts/start_tunnel.ps1, which prints the new value on each start.
+const GPU_BACKEND_FALLBACK = 'https://investigated-farming-motorola-textiles.trycloudflare.com';
+
+function backendFor(env) {
+  const configured = env && typeof env.GPU_BACKEND === 'string' ? env.GPU_BACKEND.trim() : '';
+  return configured || GPU_BACKEND_FALLBACK;
+}
 
 // Edge in-memory IP rate limiter (resets when isolate recycles)
 const edgeRateStore = new Map(); // "ip|class" -> [timestamps]
@@ -42,7 +53,7 @@ function checkEdgeRateLimit(ip, cls) {
 }
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
 
     // Proxy GPU backend API routes directly to the local RTX 3090 tunnel
@@ -74,7 +85,7 @@ export default {
         });
       }
 
-      const targetUrl = new URL(url.pathname + url.search, GPU_BACKEND);
+      const targetUrl = new URL(url.pathname + url.search, backendFor(env));
       const headers = new Headers(request.headers);
       headers.delete('host');
       if (clientIp) {

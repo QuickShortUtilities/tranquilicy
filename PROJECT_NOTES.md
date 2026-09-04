@@ -7,6 +7,50 @@ The version number lives in `APP_VERSION` at the top of
 shipping changes. The footer deliberately shows only branding and the version —
 the model id and device were removed at the user's request.
 
+## Demo week runbook (public deployment)
+
+The live site is a Cloudflare Worker serving `index.html` and proxying API calls
+to this machine's GPU over a Cloudflare tunnel.
+
+**If the site says "GPU tunnel unreachable":**
+
+1. Is the local server up? `netstat -ano | findstr :8000` — if not, launch it
+   with the WMI command below.
+2. Restart the tunnel and get the new hostname:
+   `powershell -ExecutionPolicy Bypass -File scripts\start_tunnel.ps1`
+3. Put that URL into the Worker variable **GPU_BACKEND**
+   (dashboard → Workers & Pages → tranquilicy → Settings → Variables).
+   It applies instantly — no git push, no redeploy.
+
+**Why this keeps happening:** it is a *quick* tunnel
+(`cloudflared tunnel --url ...`), which is assigned a new random hostname every
+single time it starts, and it is not installed as a service so it does not
+survive a reboot. `worker.js` only falls back to its hardcoded constant when
+`GPU_BACKEND` is unset — so set the variable once and recovery is one field.
+
+**The permanent fix** is a named tunnel: a stable hostname that survives
+restarts, so `GPU_BACKEND` never changes again. It needs an interactive login
+against a domain on your Cloudflare account, so it cannot be scripted here:
+
+```
+cloudflared tunnel login                            # browser; pick your domain
+cloudflared tunnel create tranquilicy
+cloudflared tunnel route dns tranquilicy gpu.<your-domain>
+cloudflared tunnel run tranquilicy                  # then install as a service
+```
+
+**Demo limits** live at the top of `09_api_server.py` and are sized for public
+traffic on one 3090 (~55s of GPU per default 20s track, serialised by
+`gen_lock`): 6 generations per IP/day, 30 downloads, queue depth 6, 400/day
+globally. The previous conservative values are recorded in a comment there —
+restore them when the demo comes down.
+
+**Admin bypass** (unlimited quota) is granted only to callers whose *real socket
+address* is loopback/LAN. `get_client_ip()` trusts only `cf-connecting-ip`
+(Cloudflare sets it and rejects client-supplied copies), and uvicorn runs with
+`proxy_headers=False` so `X-Forwarded-For` cannot influence it. Verified: an
+external caller sending `X-Forwarded-For: 127.0.0.1` stays non-admin.
+
 ## Goal
 
 An iOS meditation/chillout music app ("Tranquilicy" / Tranquil Soul Music) that

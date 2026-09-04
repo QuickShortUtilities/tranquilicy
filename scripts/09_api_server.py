@@ -87,12 +87,19 @@ global_window_start = time.time()
 quota_lock = threading.Lock()
 
 def get_client_ip(request: Request) -> str:
+    """Resolve the caller's IP for quota purposes.
+
+    Only `cf-connecting-ip` is trusted, because Cloudflare's edge sets it and
+    rejects requests that try to supply their own (verified: such requests are
+    refused with error 1000). `x-forwarded-for` is deliberately NOT trusted:
+    any client can send it, and is_admin_ip() grants unlimited GPU to
+    loopback/LAN addresses, so honouring it would let a visitor bypass every
+    quota by claiming to be 127.0.0.1. Direct local callers have no CF header
+    and fall through to the real socket address, which is what admin means.
+    """
     cf_ip = request.headers.get("cf-connecting-ip")
     if cf_ip:
         return cf_ip.strip()
-    xff = request.headers.get("x-forwarded-for")
-    if xff:
-        return xff.split(",")[0].strip()
     if request.client and request.client.host:
         return request.client.host
     return "127.0.0.1"
@@ -4980,4 +4987,10 @@ async function checkFrontDoorCapacity(userTriggered = false) {
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    # proxy_headers=False: uvicorn otherwise rewrites request.client.host from
+    # X-Forwarded-For for connections from 127.0.0.1 -- which is exactly where
+    # cloudflared connects from, so a caller-supplied XFF would decide the IP
+    # that is_admin_ip() checks. We resolve the client IP explicitly from
+    # cf-connecting-ip in get_client_ip(); request.client.host must stay the
+    # real socket peer for the local-caller-is-admin fallback to mean anything.
+    uvicorn.run(app, host="127.0.0.1", port=8000, proxy_headers=False)
