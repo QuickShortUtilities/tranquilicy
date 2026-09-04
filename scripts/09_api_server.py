@@ -13,13 +13,14 @@ import io
 import threading
 import time
 import uuid
+from pathlib import Path
 
 import numpy as np
 import soundfile as sf
 import torch
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse, FileResponse
 from pydantic import BaseModel
 from transformers import AutoModelForTextToWaveform, AutoProcessor, StoppingCriteria, StoppingCriteriaList
 
@@ -494,6 +495,40 @@ def apply_fades(audio: np.ndarray, file_sr: int, fade_in: float, fade_out: float
     return _apply_envelope(audio, env)
 
 
+
+
+@app.get("/capacity")
+def capacity(request: Request):
+    ip = get_client_ip(request)
+    admin = is_admin_ip(ip)
+    waiting_jobs = [j for j in jobs.values() if not j["done"] and not j.get("started", False)]
+    active_jobs = [j for j in jobs.values() if not j["done"]]
+    is_full = not admin and len(waiting_jobs) >= MAX_QUEUE_WAITING
+    return {
+        "is_full": is_full,
+        "active_jobs": len(active_jobs),
+        "waiting_jobs": len(waiting_jobs),
+        "max_queue": MAX_QUEUE_WAITING,
+        "is_admin": admin
+    }
+
+
+@app.get("/lounge/info")
+def lounge_info():
+    return {
+        "artist": "Tranquil Soul Music",
+        "current_track": "Earth Pulse (Ambient Chillout Master)",
+        "spotify_url": "https://open.spotify.com/artist/4Z8W4fKeB5YxbusRsdQVPb",
+        "spotify_embed": "https://open.spotify.com/embed/artist/4Z8W4fKeB5YxbusRsdQVPb?utm_source=generator&theme=0"
+    }
+
+
+@app.get("/lounge/track")
+def lounge_track():
+    track_path = Path(__file__).resolve().parent.parent / "assets" / "lounge" / "earth_pulse.mp3"
+    if not track_path.exists():
+        return Response(status_code=404, content="Lounge track not found")
+    return FileResponse(track_path, media_type="audio/mpeg", headers={"Accept-Ranges": "bytes"})
 
 @app.get("/quota")
 def quota(request: Request):
@@ -1428,9 +1463,240 @@ INDEX_HTML = """<!DOCTYPE html>
   }
   .strip-val { font-size: 10.5px; color: var(--gold-text); font-weight: 500; font-family: var(--ui); }
 
+
+  /* ========================================================================= */
+  /* FRONT DOOR WAITING LOUNGE & SPOTIFY SANCTUARY                             */
+  /* ========================================================================= */
+  .front-door-overlay {
+    position: fixed; inset: 0; z-index: 100000;
+    background: radial-gradient(ellipse at 50% 25%, rgba(24, 20, 16, 0.97) 0%, rgba(9, 8, 7, 0.99) 100%);
+    backdrop-filter: blur(28px); display: flex; align-items: center; justify-content: center;
+    padding: 24px; overflow-y: auto;
+  }
+  .front-door-card {
+    max-width: 740px; width: 100%;
+    background: linear-gradient(160deg, rgba(26, 23, 19, 0.94) 0%, rgba(14, 13, 11, 0.99) 100%);
+    border: 1px solid rgba(212, 185, 122, 0.35); border-radius: 24px; padding: 36px 40px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.85), 0 0 50px rgba(212,185,122,0.12), inset 0 1px 0 rgba(255,255,255,0.1);
+    text-align: center; position: relative; animation: frontDoorFadeIn .4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes frontDoorFadeIn {
+    from { opacity: 0; transform: scale(0.96) translateY(12px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .front-door-emblem {
+    width: 60px; height: 60px; margin: 0 auto 16px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #FFF8E7, var(--gold));
+    box-shadow: 0 0 30px rgba(212,185,122,0.5); display: grid; place-items: center;
+    color: #0E0C0A; font-size: 24px; font-weight: bold; position: relative;
+  }
+  .emblem-halo {
+    position: absolute; inset: -8px; border-radius: 50%;
+    border: 1.5px solid rgba(212,185,122,0.4); animation: frontDoorHalo 2.5s infinite;
+  }
+  @keyframes frontDoorHalo {
+    0%, 100% { transform: scale(1); opacity: 0.3; }
+    50% { transform: scale(1.15); opacity: 0.7; }
+  }
+
+  .front-door-kicker {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .16em;
+    color: var(--gold-text); display: block; margin-bottom: 8px;
+  }
+  .front-door-headline {
+    font-family: var(--display); font-size: 30px; font-weight: 500; color: #FFF8E7;
+    margin: 0 0 12px; line-height: 1.25;
+  }
+  .front-door-subtitle {
+    font-size: 13.5px; color: var(--text-2); max-width: 580px; margin: 0 auto 22px;
+    line-height: 1.6;
+  }
+
+  /* Front Door Live Capacity Radar */
+  .front-door-radar {
+    background: rgba(0,0,0,0.4); border: 1px solid rgba(212,185,122,0.25);
+    border-radius: 12px; padding: 12px 18px; margin: 0 auto 24px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    max-width: 560px; text-align: left;
+  }
+  .radar-dot-pulse {
+    width: 12px; height: 12px; border-radius: 50%; background: #F59E0B;
+    box-shadow: 0 0 10px #F59E0B; animation: radarDotPulse 1.4s infinite; flex: none;
+  }
+  @keyframes radarDotPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.85); }
+  }
+  .radar-status-info { flex: 1 1 auto; }
+  .radar-status-title { font-size: 12px; color: #FFF8E7; }
+  .radar-status-title strong { color: var(--gold-text); }
+  .radar-status-timer { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+  .btn-check-door {
+    padding: 6px 12px; font-size: 11px; font-weight: 600; border-radius: 6px;
+    background: rgba(212,185,122,0.18); border: 1px solid var(--gold); color: var(--gold-text);
+    cursor: pointer; transition: all .15s ease; flex: none;
+  }
+  .btn-check-door:hover { background: var(--gold); color: #0E0C0A; }
+
+  /* Media Grid */
+  .front-door-media-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;
+    text-align: left;
+  }
+  @media (max-width: 680px) {
+    .front-door-media-grid { grid-template-columns: 1fr; }
+  }
+  .lounge-media-card {
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .media-card-head { display: flex; align-items: center; justify-content: space-between; }
+  .media-badge {
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+    padding: 3px 8px; border-radius: 4px;
+  }
+  .media-badge.spotify { background: #1DB954; color: #000; }
+  .media-badge.ambient { background: rgba(212,185,122,0.25); color: var(--gold-text); }
+  .media-title { font-size: 11.5px; color: var(--text-2); font-weight: 500; }
+  
+  .spotify-frame-wrap {
+    border-radius: 12px; overflow: hidden; height: 152px; background: #121212;
+  }
+  .spotify-link-btn {
+    display: inline-block; text-align: center; padding: 7px; font-size: 11px;
+    font-weight: 600; color: #1DB954; background: rgba(29, 185, 84, 0.1);
+    border: 1px solid rgba(29, 185, 84, 0.3); border-radius: 8px; text-decoration: none;
+    transition: all .2s ease;
+  }
+  .spotify-link-btn:hover { background: #1DB954; color: #000; }
+
+  /* Ambient Stream Player */
+  .ambient-player-inner {
+    display: flex; flex-direction: column; justify-content: space-between; height: 100%;
+    gap: 12px;
+  }
+  .ambient-track-title {
+    font-family: var(--display); font-size: 18px; color: #FFF8E7; font-weight: 500;
+  }
+  .ambient-track-meta { font-size: 11px; color: var(--text-3); }
+  .ambient-controls {
+    display: flex; align-items: center; gap: 14px; margin-top: auto;
+    background: rgba(0,0,0,0.3); padding: 10px 14px; border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .ambient-play-btn {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: var(--gold); border: none; color: #0E0C0A; font-size: 14px;
+    cursor: pointer; display: grid; place-items: center; transition: all .15s ease;
+    box-shadow: 0 0 14px rgba(212,185,122,0.4); flex: none;
+  }
+  .ambient-play-btn:hover { transform: scale(1.08); box-shadow: 0 0 20px rgba(212,185,122,0.6); }
+  .ambient-vol-wrap {
+    display: flex; align-items: center; gap: 8px; flex: 1; font-size: 10.5px; color: var(--text-2);
+  }
+  .ambient-vol { flex: 1; accent-color: var(--gold); cursor: pointer; height: 4px; }
+
+  /* Actions */
+  .front-door-actions {
+    display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;
+  }
+  .btn-enter-studio { margin: 0; min-width: 200px; }
 </style>
 </head>
 <body>
+<!-- FRONT DOOR WAITING LOUNGE (Shown when studio is at peak capacity) -->
+<div id="frontDoorLounge" class="front-door-overlay" style="display:none">
+  <div class="front-door-card">
+    <div class="front-door-emblem">
+      <div class="emblem-halo"></div>
+      <span class="emblem-icon">✦</span>
+    </div>
+
+    <span class="front-door-kicker">TRANQUIL SOUL MUSIC STUDIO</span>
+    <h1 class="front-door-headline">We're really busy right now, but come back soon to make some music.</h1>
+    <p class="front-door-subtitle">
+      Our local NVIDIA RTX 3090 GPU is currently synthesizing audio at maximum capacity for active creators. 
+      Please make yourself comfortable in the sanctuary lounge—listen to Tranquil Soul Music on Spotify or enjoy our ambient background stream while we hold your place.
+    </p>
+
+    <!-- Real-time Capacity Radar -->
+    <div class="front-door-radar">
+      <div class="radar-dot-pulse"></div>
+      <div class="radar-status-info">
+        <div class="radar-status-title">
+          <strong>RTX 3090 Studio Busy</strong> · <span id="frontDoorQueueCount">Queue Slots In Use</span>
+        </div>
+        <div class="radar-status-timer">
+          Auto-checking availability in <span id="frontDoorTimer">10s</span>...
+        </div>
+      </div>
+      <button type="button" class="btn-check-door" id="btnCheckDoor" onclick="checkFrontDoorCapacity(true)">
+        ⟳ Check Now
+      </button>
+    </div>
+
+    <!-- Spotify & Ambient Lounge Grid -->
+    <div class="front-door-media-grid">
+      <!-- Spotify Card -->
+      <div class="lounge-media-card">
+        <div class="media-card-head">
+          <span class="media-badge spotify">SPOTIFY</span>
+          <span class="media-title">Tranquil Soul Music</span>
+        </div>
+        <div class="spotify-frame-wrap">
+          <iframe 
+            id="spotifyEmbedFrame"
+            style="border-radius:12px; width:100%; height:152px; border:0;" 
+            src="https://open.spotify.com/embed/artist/4Z8W4fKeB5YxbusRsdQVPb?utm_source=generator&theme=0" 
+            allowfullscreen="" 
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
+            loading="lazy">
+          </iframe>
+        </div>
+        <a href="https://open.spotify.com/artist/4Z8W4fKeB5YxbusRsdQVPb" target="_blank" rel="noopener noreferrer" class="spotify-link-btn" id="spotifyExternalLink">
+          Listen to Tranquil Soul Music on Spotify ↗
+        </a>
+      </div>
+
+      <!-- In-Browser Ambient Background Stream Card -->
+      <div class="lounge-media-card">
+        <div class="media-card-head">
+          <span class="media-badge ambient">SANCTUARY AUDIO</span>
+          <span class="media-title">Background Stream</span>
+        </div>
+        <div class="ambient-player-inner">
+          <div>
+            <div class="ambient-track-title" id="ambientTrackTitle">Earth Pulse · Ambient Master</div>
+            <div class="ambient-track-meta">24-Bit 48kHz · Tranquil Soul Music</div>
+          </div>
+          <div class="ambient-controls">
+            <button type="button" class="ambient-play-btn" id="btnLoungePlay" onclick="toggleLoungeAudio()">
+              <span id="loungePlayIcon">▶</span>
+              <span id="loungePauseIcon" style="display:none">⏸</span>
+            </button>
+            <div class="ambient-vol-wrap">
+              <span>Vol</span>
+              <input type="range" class="ambient-vol" id="loungeVol" min="0" max="100" value="80" oninput="setLoungeVolume(this.value)">
+            </div>
+          </div>
+          <audio id="loungeAudio" preload="none" loop></audio>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions Footer -->
+    <div class="front-door-actions">
+      <button type="button" class="btn-primary btn-enter-studio" onclick="checkFrontDoorCapacity(true)">
+        Enter Studio Now
+      </button>
+      <button type="button" class="btn-ghost" onclick="closeFrontDoorLounge()">
+        Browse Studio in Preview Mode
+      </button>
+    </div>
+  </div>
+</div>
+
 <div id="customCursorDot"></div>
 <div id="customCursorRing"></div>
 <canvas id="featherCanvas"></canvas>
@@ -1465,6 +1731,7 @@ INDEX_HTML = """<!DOCTYPE html>
       </div>
       <div style="display:flex; gap:10px; margin-top:24px">
         <button type="button" class="btn-primary" id="gpuSaveBtn" style="margin:0" onclick="saveGpuEndpoint()">Save & Test</button>
+        <button type="button" class="btn-ghost" id="gpuDoorPreviewBtn" style="margin:0" onclick="closeGpuModal(); openFrontDoorLounge();">Preview Front Door</button>
         <button type="button" class="btn-ghost" id="gpuCloseBtn" style="margin:0" onclick="closeGpuModal()">Close</button>
       </div>
     </div>
@@ -2996,7 +3263,7 @@ async function generate() {
     if (msg.includes('Daily generation limit') || msg.includes('Daily limit reached')) {
       showStudioNotice('Daily Quota Limit (5/5)', `${msg}<br><br><span style="opacity:0.8;">Local admin and localhost creators have unlimited access. Visitors receive 5 complimentary master-quality generations every 24 hours.</span>`, '⚡');
     } else if (msg.includes('peak capacity')) {
-      showStudioNotice('Studio At Peak Capacity', `${msg}<br><br><span style="opacity:0.8;">All GPU queue slots are currently reserved. Please wait 20–30 seconds and click Generate Track again.</span>`, '⏳');
+      openFrontDoorLounge(); showStudioNotice('Studio At Peak Capacity', `${msg}<br><br><span style="opacity:0.8;">All GPU queue slots are currently reserved. Please wait 20–30 seconds and click Generate Track again.</span>`, '⏳');
     } else if (msg.includes('already have a generation')) {
       showStudioNotice('Generation In Progress', msg, '⚡');
     }
@@ -4603,6 +4870,117 @@ async function saveGpuEndpoint() {
 // Initial GPU check
 checkGpuStatus();
 setInterval(checkGpuStatus, 15000);
+
+
+// ---- Front Door Waiting Lounge & Spotify Ambient Controller ----
+let frontDoorCountdown = 10;
+let frontDoorInterval = null;
+
+function openFrontDoorLounge() {
+  const lounge = document.getElementById('frontDoorLounge');
+  if (!lounge) return;
+  lounge.style.display = 'flex';
+
+  // Set up ambient audio track if not set
+  const audio = document.getElementById('loungeAudio');
+  if (audio && !audio.src) {
+    audio.src = getApiUrl('/lounge/track');
+  }
+
+  // Start polling countdown
+  startFrontDoorTimer();
+}
+
+function closeFrontDoorLounge() {
+  const lounge = document.getElementById('frontDoorLounge');
+  if (lounge) lounge.style.display = 'none';
+  if (frontDoorInterval) {
+    clearInterval(frontDoorInterval);
+    frontDoorInterval = null;
+  }
+  const audio = document.getElementById('loungeAudio');
+  if (audio && !audio.paused) {
+    audio.pause();
+    const pIcon = document.getElementById('loungePlayIcon');
+    const paIcon = document.getElementById('loungePauseIcon');
+    if (pIcon) pIcon.style.display = 'inline';
+    if (paIcon) paIcon.style.display = 'none';
+  }
+}
+
+function startFrontDoorTimer() {
+  if (frontDoorInterval) clearInterval(frontDoorInterval);
+  frontDoorCountdown = 10;
+  const timerSpan = document.getElementById('frontDoorTimer');
+  if (timerSpan) timerSpan.textContent = frontDoorCountdown + 's';
+
+  frontDoorInterval = setInterval(async () => {
+    frontDoorCountdown--;
+    const tSpan = document.getElementById('frontDoorTimer');
+    if (tSpan) tSpan.textContent = frontDoorCountdown + 's';
+
+    if (frontDoorCountdown <= 0) {
+      frontDoorCountdown = 10;
+      await checkFrontDoorCapacity(false);
+    }
+  }, 1000);
+}
+
+async function checkFrontDoorCapacity(userTriggered = false) {
+  const countEl = document.getElementById('frontDoorQueueCount');
+  const checkBtn = document.getElementById('btnCheckDoor');
+  if (checkBtn && userTriggered) checkBtn.textContent = 'Checking...';
+
+  try {
+    const res = await fetch(getApiUrl('/capacity'));
+    if (res.ok) {
+      const data = await res.json();
+      if (countEl) {
+        countEl.textContent = `${data.waiting_jobs}/${data.max_queue} Waiting`;
+      }
+      if (!data.is_full) {
+        // Slot is open! Welcome user inside!
+        closeFrontDoorLounge();
+        showStudioNotice('Studio Available!', 'A generation slot has freed up on the local RTX 3090. Welcome inside Tranquil Soul Music Studio!', '✦');
+        return;
+      }
+    }
+  } catch(e) {}
+
+  if (checkBtn && userTriggered) {
+    checkBtn.textContent = 'Still Busy';
+    setTimeout(() => { if (checkBtn) checkBtn.textContent = '⟳ Check Now'; }, 1800);
+  }
+}
+
+function toggleLoungeAudio() {
+  const audio = document.getElementById('loungeAudio');
+  const playIcon = document.getElementById('loungePlayIcon');
+  const pauseIcon = document.getElementById('loungePauseIcon');
+  if (!audio) return;
+
+  if (!audio.src) {
+    audio.src = getApiUrl('/lounge/track');
+  }
+
+  if (audio.paused) {
+    audio.play().then(() => {
+      if (playIcon) playIcon.style.display = 'none';
+      if (pauseIcon) pauseIcon.style.display = 'inline';
+    }).catch(e => console.warn('Lounge audio play error:', e));
+  } else {
+    audio.pause();
+    if (playIcon) playIcon.style.display = 'inline';
+    if (pauseIcon) pauseIcon.style.display = 'none';
+  }
+}
+
+function setLoungeVolume(val) {
+  const audio = document.getElementById('loungeAudio');
+  if (audio) {
+    audio.volume = parseFloat(val) / 100;
+  }
+}
 
 </script>
 </body>

@@ -35,6 +35,7 @@ venv.bak/
 *.ogg
 *.flac
 !assets/demo/*.mp3
+!assets/lounge/*.mp3
 
 # Model weights / Checkpoints
 *.pt

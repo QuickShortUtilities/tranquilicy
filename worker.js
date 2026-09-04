@@ -31,7 +31,7 @@ export default {
     const url = new URL(request.url);
 
     // Proxy GPU backend API routes directly to the local RTX 3090 tunnel
-    const apiRoutes = ['/generate', '/status/', '/result/', '/gpu', '/cancel/', '/master/', '/quota'];
+    const apiRoutes = ['/generate', '/status/', '/result/', '/gpu', '/cancel/', '/master/', '/quota', '/capacity', '/lounge/'];
     if (apiRoutes.some(route => url.pathname.startsWith(route))) {
       // Handle CORS preflight
       if (request.method === 'OPTIONS') {
