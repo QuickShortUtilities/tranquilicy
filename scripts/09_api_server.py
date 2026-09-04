@@ -324,9 +324,18 @@ def run_job(job_id: str, prompt: str, duration_sec: float, guidance_scale: float
         print(f"[Tranquilicy] Job {job_id[:8]}: COMPLETE final={len(full_audio)/sr:.1f}s (requested {duration_sec}s)", flush=True)
         buf = io.BytesIO()
         sf.write(buf, full_audio, sr, format="WAV")
-        jobs[job_id]["audio"] = buf.getvalue()
+        audio_bytes = buf.getvalue()
+        jobs[job_id]["audio"] = audio_bytes
         jobs[job_id]["progress"] = 1.0
         jobs[job_id]["done"] = True
+        
+        # Save to disk
+        try:
+            os.makedirs("outputs", exist_ok=True)
+            with open(f"outputs/{job_id}.wav", "wb") as f:
+                f.write(audio_bytes)
+        except:
+            pass
     except Exception as e:
         import traceback
         print(f"[Tranquilicy] Job {job_id[:8]}: EXCEPTION {e}\n{traceback.format_exc()}", flush=True)
@@ -385,10 +394,10 @@ def generate(req: GenerateRequest, request: Request):
             )
         q["generations"] += 1
 
-        global_generations_today += 1
-        global total_generations
-        total_generations += 1
-        save_stats(total_generations)
+    global_generations_today += 1
+    global total_generations
+    total_generations += 1
+    save_stats(total_generations)
 
     # Full duration support: allows 60s, 90s, 120s, 180s with multi-pass continuation chaining
     duration_sec = max(MIN_DURATION, min(MAX_DURATION, req.duration_sec))
