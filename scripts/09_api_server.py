@@ -723,9 +723,59 @@ INDEX_HTML = """
     .card.unlocking, .card.unlocking::after, .rail-node.active .rail-dot, .eq i { animation: none; }
     .rail-line::after { transition: none; }
   }
+
+  /* ---- Luxury Custom Gold Cursor ---- */
+  @media (hover: hover) and (pointer: fine) {
+    body, button, a, input, select, textarea, .knob, .tag-chip, .archetype-btn, .title-pill, .speed-btn {
+      cursor: none !important;
+    }
+    #customCursorDot {
+      position: fixed; top: 0; left: 0; width: 6px; height: 6px;
+      background: #D4B97A; border-radius: 50%; pointer-events: none; z-index: 999999;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 10px #D4B97A, 0 0 20px rgba(212,185,122,0.6);
+      transition: transform 0.08s ease-out, opacity 0.2s ease, width 0.2s ease, height 0.2s ease;
+    }
+    #customCursorRing {
+      position: fixed; top: 0; left: 0; width: 28px; height: 28px;
+      border: 1.2px solid rgba(193,166,115,0.5); border-radius: 50%; pointer-events: none; z-index: 999998;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 12px rgba(193,166,115,0.18);
+      transition: width 0.22s var(--ease-out), height 0.22s var(--ease-out), border-color 0.22s var(--ease), background 0.22s var(--ease), opacity 0.2s ease;
+    }
+    #customCursorRing.hovering {
+      width: 44px; height: 44px;
+      border-color: #D4B97A;
+      background: rgba(193,166,115,0.10);
+      box-shadow: 0 0 22px rgba(193,166,115,0.35);
+    }
+    #customCursorRing.clicking {
+      width: 20px; height: 20px;
+      border-color: #FFF8E7;
+      background: rgba(193,166,115,0.25);
+    }
+    #customCursorDot.clicking {
+      transform: translate(-50%, -50%) scale(1.6);
+    }
+    #customCursorRing.dragging {
+      width: 38px; height: 38px;
+      border-color: #D4B97A;
+      border-style: dashed;
+      animation: cursorSpin 3s linear infinite;
+    }
+    @keyframes cursorSpin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+    .cursor-hidden #customCursorDot, .cursor-hidden #customCursorRing {
+      opacity: 0;
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    #customCursorDot, #customCursorRing { display: none !important; }
+  }
 </style>
 </head>
 <body>
+<div id="customCursorDot"></div>
+<div id="customCursorRing"></div>
 <canvas id="featherCanvas"></canvas>
 <div class="wrap">
   <div class="brand">
@@ -1389,15 +1439,20 @@ function drawStarChart() {
   svgHtml += `<polygon points="${valuePts}" fill="rgba(193,166,115,.16)" stroke="#C1A673" stroke-width="1.5"/>`;
   DIALS.forEach((d, i) => {
     const [x, y] = pt(i, knobs[d.key].value / 100);
-    svgHtml += `<circle cx="${x}" cy="${y}" r="4" fill="#D4B97A" stroke="#090807" stroke-width="1"/>`;
-    const [lx, ly] = pt(i, 1.24);
-    svgHtml += `<text x="${lx}" y="${ly}" fill="#9A9188" font-size="8" font-family="Montserrat, sans-serif" text-anchor="middle" dominant-baseline="middle">${d.label}</text>`;
+    const active = draggingDialKey === d.key || hoverDialKey === d.key;
+    if (active) {
+      svgHtml += `<circle cx="${x}" cy="${y}" r="11" fill="rgba(193,166,115,.25)"/>`;
+    }
+    svgHtml += `<circle cx="${x}" cy="${y}" r="${active ? 6 : 4.2}" fill="#D4B97A" stroke="#090807" stroke-width="1.2"/>`;
+    const [lx, ly] = pt(i, 1.25);
+    svgHtml += `<text x="${lx}" y="${ly}" fill="${active ? '#D4B97A' : '#9A9188'}" font-size="${active ? '9' : '8'}" font-family="Montserrat, sans-serif" text-anchor="middle" dominant-baseline="middle">${d.label}</text>`;
   });
   svg.innerHTML = svgHtml;
 }
 
 buildDials();
 drawStarChart();
+setupStarChartDrag();
 
 // ---- Vibe Matrix & Archetypes ----
 const VIBE_CATEGORIES = {
@@ -2679,6 +2734,140 @@ function saveStillFrame() {
     setVidStatus('Still frame ready in the bar below');
   }, 'image/png');
 }
+
+// ---- Star Chart Drag: grab a vertex directly ----
+let draggingDialKey = null, hoverDialKey = null;
+function setupStarChartDrag() {
+  const svg = document.getElementById('starChart');
+  const cx = 90, cy = 90, maxR = 68;
+  const n = DIALS.length;
+  const angleFor = i => -Math.PI / 2 + i * (2 * Math.PI / n);
+
+  function svgPoint(e) {
+    const rect = svg.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (180 / rect.width),
+      y: (e.clientY - rect.top) * (180 / rect.height),
+    };
+  }
+
+  function nearestVertex(p) {
+    let best = null, bestDist = Infinity;
+    DIALS.forEach((d, i) => {
+      const a = angleFor(i);
+      const frac = knobs[d.key].value / 100;
+      const vx = cx + Math.cos(a) * maxR * frac, vy = cy + Math.sin(a) * maxR * frac;
+      const dist = Math.hypot(p.x - vx, p.y - vy);
+      if (dist < bestDist) { bestDist = dist; best = { key: d.key, i, dist }; }
+    });
+    return best;
+  }
+
+  function valueFromPointer(p, i) {
+    const a = angleFor(i);
+    const proj = (p.x - cx) * Math.cos(a) + (p.y - cy) * Math.sin(a);
+    return Math.max(0, Math.min(100, (proj / maxR) * 100));
+  }
+
+  const GRAB_RADIUS = 22;
+
+  svg.addEventListener('pointerdown', e => {
+    const p = svgPoint(e);
+    const nearest = nearestVertex(p);
+    if (!nearest || nearest.dist > GRAB_RADIUS) return;
+    draggingDialKey = nearest.key;
+    svg.setPointerCapture(e.pointerId);
+    document.body.classList.add('dragging-star');
+    knobs[nearest.key].set(valueFromPointer(p, nearest.i));
+    drawStarChart();
+    e.preventDefault();
+  });
+
+  svg.addEventListener('pointermove', e => {
+    const p = svgPoint(e);
+    if (!draggingDialKey) {
+      const nearest = nearestVertex(p);
+      const overHandle = nearest && nearest.dist <= GRAB_RADIUS;
+      if (hoverDialKey !== (overHandle ? nearest.key : null)) {
+        hoverDialKey = overHandle ? nearest.key : null;
+        drawStarChart();
+      }
+      svg.style.cursor = overHandle ? 'grab' : 'default';
+      return;
+    }
+    const i = DIALS.findIndex(d => d.key === draggingDialKey);
+    knobs[draggingDialKey].set(valueFromPointer(p, i));
+    drawStarChart();
+  });
+
+  svg.addEventListener('pointerleave', () => {
+    if (hoverDialKey !== null) { hoverDialKey = null; drawStarChart(); }
+  });
+
+  const stop = () => {
+    if (!draggingDialKey) return;
+    draggingDialKey = null;
+    document.body.classList.remove('dragging-star');
+    drawStarChart();
+  };
+  svg.addEventListener('pointerup', stop);
+  svg.addEventListener('pointercancel', stop);
+  svg.addEventListener('lostpointercapture', stop);
+}
+
+// ---- Custom Luxury Gold Cursor ----
+(function() {
+  const dot = document.getElementById('customCursorDot');
+  const ring = document.getElementById('customCursorRing');
+  if (!dot || !ring) return;
+
+  let mouseX = -100, mouseY = -100;
+  let ringX = -100, ringY = -100;
+  let isVisible = false;
+
+  window.addEventListener('mousemove', e => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    if (!isVisible) {
+      isVisible = true;
+      document.body.classList.remove('cursor-hidden');
+      ringX = mouseX;
+      ringY = mouseY;
+    }
+    dot.style.left = mouseX + 'px';
+    dot.style.top = mouseY + 'px';
+
+    const target = e.target;
+    const isInteractive = target && target.closest ? target.closest('button, a, input, select, textarea, .knob, .tag-chip, .archetype-btn, .title-pill, .speed-btn, .toggle, .art-drop, #starChart, #exportCanvas') : false;
+    ring.classList.toggle('hovering', !!isInteractive);
+    const isDragging = document.body.classList.contains('dragging-knob') || document.body.classList.contains('dragging-star');
+    ring.classList.toggle('dragging', isDragging);
+  });
+
+  document.addEventListener('mouseleave', () => {
+    isVisible = false;
+    document.body.classList.add('cursor-hidden');
+  });
+
+  window.addEventListener('mousedown', () => {
+    ring.classList.add('clicking');
+    dot.classList.add('clicking');
+  });
+  window.addEventListener('mouseup', () => {
+    ring.classList.remove('clicking');
+    dot.classList.remove('clicking');
+  });
+
+  function renderCursor() {
+    ringX += (mouseX - ringX) * 0.22;
+    ringY += (mouseY - ringY) * 0.22;
+    ring.style.left = ringX + 'px';
+    ring.style.top = ringY + 'px';
+    requestAnimationFrame(renderCursor);
+  }
+  requestAnimationFrame(renderCursor);
+})();
+
 </script>
 </body>
 </html>
