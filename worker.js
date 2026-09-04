@@ -8,21 +8,36 @@ import html from './index.html';
 const GPU_BACKEND = 'https://clearly-gather-deviation-shorter.trycloudflare.com';
 
 // Edge in-memory IP rate limiter (resets when isolate recycles)
-const edgeRateStore = new Map(); // ip -> [timestamps]
+const edgeRateStore = new Map(); // "ip|class" -> [timestamps]
 
-function checkEdgeRateLimit(ip) {
+// A single flat limit cannot work here: the page polls /status while a track
+// renders, so one legitimate visitor makes far more cheap read requests than
+// the expensive write requests we actually want to ration. A flat 45/min meant
+// a visitor was cut off with a 429 partway through their own generation.
+//
+// So limit by cost class instead:
+//   WRITE - starts or affects GPU work. This is the abuse surface.
+//   READ  - status/capacity polling. Cheap, and cutting it off breaks the UI.
+const WRITE_ROUTES = ['/generate', '/master/', '/cancel/'];
+const LIMITS = { write: 15, read: 300 }; // per IP per minute
+
+function routeClass(pathname) {
+  return WRITE_ROUTES.some(r => pathname.startsWith(r)) ? 'write' : 'read';
+}
+
+function checkEdgeRateLimit(ip, cls) {
   if (!ip) return true;
   const now = Date.now();
   const windowMs = 60000; // 1 minute
-  const maxCallsPerMin = 45; // allows frequent status polling but blocks abusive flooding
+  const key = ip + '|' + cls;
 
-  let timestamps = edgeRateStore.get(ip) || [];
-  timestamps = timestamps.filter(t => now - t < windowMs);
-  if (timestamps.length >= maxCallsPerMin) {
+  let timestamps = (edgeRateStore.get(key) || []).filter(t => now - t < windowMs);
+  if (timestamps.length >= LIMITS[cls]) {
+    edgeRateStore.set(key, timestamps);
     return false;
   }
   timestamps.push(now);
-  edgeRateStore.set(ip, timestamps);
+  edgeRateStore.set(key, timestamps);
   return true;
 }
 
@@ -48,8 +63,8 @@ export default {
 
       const clientIp = request.headers.get('CF-Connecting-IP') || request.headers.get('x-real-ip') || '';
 
-      // Edge rate-limit check for aggressive flooding
-      if (clientIp && !checkEdgeRateLimit(clientIp)) {
+      // Edge rate-limit check for aggressive flooding, budgeted per cost class
+      if (clientIp && !checkEdgeRateLimit(clientIp, routeClass(url.pathname))) {
         return new Response(JSON.stringify({ detail: 'Edge rate limit exceeded. Please slow down.' }), {
           status: 429,
           headers: {

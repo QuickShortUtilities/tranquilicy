@@ -2547,7 +2547,10 @@ async function generate() {
     const queueEstText = document.getElementById('queueEstText');
 
     while (true) {
-      await new Promise(r => setTimeout(r, 380));
+      // 380ms was ~158 req/min per viewer through the home tunnel, and the
+      // progress bar cannot show more than it does at 750ms anyway (~70 updates
+      // across a typical render). Cheap, but pointless load on a home uplink.
+      await new Promise(r => setTimeout(r, 750));
       const sRes = await fetch(getApiUrl('/status/' + job_id));
       if (!sRes.ok) throw new Error('Status check failed: ' + sRes.status);
       const s = await sRes.json();

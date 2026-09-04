@@ -61,11 +61,25 @@ def gpu_status():
 
 
 # ---- Security, IP Quotas & GPU Concurrency Queue ---------------------------
-MAX_GENERATIONS_PER_IP = 2  # Tight demo limit for LinkedIn visitors
-MAX_DOWNLOADS_PER_IP = 3
-QUOTA_WINDOW_SEC = 86400.0  # 24 hours
-MAX_QUEUE_WAITING = 2       # max 2 jobs waiting in queue behind the 1 running
-MAX_DAILY_GLOBAL_GENERATIONS = 35  # Master circuit breaker: prevents GPU burnout
+# PUBLIC DEMO WEEK settings. gen_lock serialises the GPU, so exactly one track
+# renders at a time and every limit below follows from that one fact.
+# Measured throughput: ~2.75x realtime (a 25s track took 69s, a 6s track 18s),
+# so the default 20s track is roughly 55s of GPU. That is ~65 tracks/hour if
+# the queue never runs dry.
+#
+# Previous conservative values, to restore when the demo comes down:
+#   per-IP 2, downloads 3, queue 2, global/day 35
+MAX_GENERATIONS_PER_IP = 6   # enough to try a few prompts and move the dials
+MAX_DOWNLOADS_PER_IP = 30    # exports are CPU-only; 6 tracks x (audio+video+still)
+QUOTA_WINDOW_SEC = 86400.0   # 24 hours
+# Queue depth is a wait-time budget, not a capacity dial: at ~55s a track,
+# position 6 waits ~5.5 min. Deeper than this and people abandon anyway, so
+# they are better served an honest "at capacity" than a queue they will leave.
+MAX_QUEUE_WAITING = 6
+# Circuit breaker: 400 x ~55s is ~6 GPU-hours/day worst case, which a 3090
+# handles comfortably (it throttles itself before anything is at risk) and
+# costs roughly £1.50/day in electricity at 350W.
+MAX_DAILY_GLOBAL_GENERATIONS = 400
 
 ip_quotas = {}  # ip -> {"generations": int, "downloads": int, "window_start": float, "active_job_id": str | None}
 global_generations_today = 0
