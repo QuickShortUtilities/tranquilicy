@@ -2492,7 +2492,7 @@ function getApiEndpoint() {
   const stored = localStorage.getItem('tranquilicy_gpu_endpoint');
   if (stored) return stored.replace(/\/+$/, '');
   const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  return isLocal ? '' : 'http://localhost:8000';
+  return isLocal ? '' : 'https://clearly-gather-deviation-shorter.trycloudflare.com';
 }
 function getApiUrl(path) {
   const base = getApiEndpoint();
