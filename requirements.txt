@@ -1,0 +1,17 @@
+# Install torch separately first with CUDA support for your 3090, e.g.:
+#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+# Then install the rest:
+#   pip install -r requirements.txt
+transformers>=4.38.0
+peft>=0.9.0
+accelerate>=0.27.0
+# Pinned: newer `datasets` needs torchcodec for audio, whose native build is
+# broken on this Windows/torch combo. 2.19.0 uses soundfile instead.
+datasets==2.19.0
+# Pinned: pandas>=3.0's default Arrow-backed string dtype breaks datasets
+# 2.19.0's schema check (`large_string` != `string`) when reading metadata.csv.
+pandas==2.2.3
+librosa
+soundfile
+numpy
+tqdm
