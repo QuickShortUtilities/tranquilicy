@@ -188,12 +188,15 @@ class StepCounter(StoppingCriteria):
         return bool(self.should_stop and self.should_stop())
 
 
+
 class GenerateRequest(BaseModel):
     prompt: str
     duration_sec: float = 20.0
     guidance_scale: float = 3.0
     negative_prompt: str = ""
     seed: int | None = None
+
+
 
 
 def run_job(job_id: str, prompt: str, duration_sec: float, guidance_scale: float,
@@ -203,35 +206,30 @@ def run_job(job_id: str, prompt: str, duration_sec: float, guidance_scale: float
         approx_samples_per_segment = SEGMENT_NEW_TOKENS * (sr / FRAMES_PER_SEC)
         total_segments = max(1, int(np.ceil(target_len / approx_samples_per_segment)))
 
+        print(f"[Tranquilicy] Job {job_id[:8]}: duration={duration_sec}s target_len={target_len} total_segments={total_segments}", flush=True)
+
         full_audio = None
         completed_segments = 0
-        # Safety valve: if a segment ever comes back shorter than requested (e.g. the model
-        # stops early), the while-loop below would otherwise retry forever without making
-        # progress. Cap total attempts well above the expected segment count.
         max_iterations = total_segments * 3 + 5
+        audio_seed_buf = None  # renamed from seed to avoid clobbering the seed int param
 
-        with gen_lock:  # one generation at a time -- this model/GPU isn't safe for concurrent calls
+        with gen_lock:
             if job_id in jobs:
                 jobs[job_id]["started"] = True
-            # set inside the lock: the patched encoder-prep reads this global, so it
-            # must not be visible to any other generation
-            # every run assigns this before generating (None when there's nothing to
-            # exclude), so a value left behind by a failed run can never leak into
-            # the next one -- no cleanup needed
             _negative_ctx["text"] = negative_prompt or None
             if seed is not None:
-                torch.manual_seed(seed)  # reproducible takes, and paired A/B comparisons
+                torch.manual_seed(seed)
             iterations = 0
             while full_audio is None or len(full_audio) < target_len:
                 iterations += 1
                 if iterations > max_iterations:
-                    break  # keep the audio we have rather than discarding a good take
-                # Only ask for as many tokens as this segment actually still needs, capped at
-                # SEGMENT_NEW_TOKENS -- otherwise a short (e.g. 5s) request still pays for a
-                # full ~20s generation internally and throws most of it away.
+                    print(f"[Tranquilicy] Job {job_id[:8]}: max_iterations={max_iterations} hit, stopping with {len(full_audio) if full_audio is not None else 0} samples", flush=True)
+                    break
                 remaining_samples = target_len - (len(full_audio) if full_audio is not None else 0)
                 remaining_tokens = int(np.ceil(remaining_samples / (sr / FRAMES_PER_SEC))) + TOKEN_HEADROOM
                 seg_max_tokens = max(MIN_SEGMENT_TOKENS, min(SEGMENT_NEW_TOKENS, remaining_tokens))
+
+                print(f"[Tranquilicy] Job {job_id[:8]}: segment {iterations}/{total_segments} remaining={remaining_samples/sr:.1f}s tokens={seg_max_tokens}", flush=True)
 
                 def on_step(step, _seg=completed_segments, _max=seg_max_tokens):
                     overall = (_seg + min(step / _max, 1.0)) / total_segments
@@ -241,8 +239,8 @@ def run_job(job_id: str, prompt: str, duration_sec: float, guidance_scale: float
                 if full_audio is None:
                     inputs = processor(text=[prompt], padding=True, return_tensors="pt").to(device)
                 else:
-                    seed = full_audio[-seed_len:]
-                    inputs = processor(text=[prompt], audio=seed, sampling_rate=sr, padding=True, return_tensors="pt").to(device)
+                    audio_seed_buf = full_audio[-seed_len:]
+                    inputs = processor(text=[prompt], audio=audio_seed_buf, sampling_rate=sr, padding=True, return_tensors="pt").to(device)
                     inputs["input_values"] = inputs["input_values"].half()
 
                 out = model.generate(
@@ -256,23 +254,41 @@ def run_job(job_id: str, prompt: str, duration_sec: float, guidance_scale: float
 
                 seg = out[0, 0].detach().cpu().float().numpy()
                 before = 0 if full_audio is None else len(full_audio)
-                full_audio = seg if full_audio is None else np.concatenate([full_audio, seg[seed_len:]])
+                print(f"[Tranquilicy] Job {job_id[:8]}: seg raw={len(seg)} ({len(seg)/sr:.1f}s) seed_len={seed_len}", flush=True)
+
+                if full_audio is None:
+                    full_audio = seg
+                else:
+                    # Strip the conditioning echo from the front of the continuation output.
+                    # If seg is shorter than seed_len the model stopped very early -- keep all of it.
+                    new_part = seg[seed_len:] if len(seg) > seed_len else seg
+                    if len(new_part) == 0:
+                        print(f"[Tranquilicy] Job {job_id[:8]}: continuation returned 0 new samples, stopping chain", flush=True)
+                        break
+                    full_audio = np.concatenate([full_audio, new_part])
+
                 completed_segments += 1
+                print(f"[Tranquilicy] Job {job_id[:8]}: total audio now {len(full_audio)/sr:.1f}s / {duration_sec}s", flush=True)
                 if len(full_audio) <= before:
-                    break  # this segment added nothing; another round would too
+                    print(f"[Tranquilicy] Job {job_id[:8]}: no growth in segment {iterations}, stopping chain", flush=True)
+                    break
 
         if full_audio is None or len(full_audio) < sr * 0.5:
             raise RuntimeError("generation produced no usable audio")
 
         full_audio = full_audio[:target_len]
+        print(f"[Tranquilicy] Job {job_id[:8]}: COMPLETE final={len(full_audio)/sr:.1f}s (requested {duration_sec}s)", flush=True)
         buf = io.BytesIO()
         sf.write(buf, full_audio, sr, format="WAV")
         jobs[job_id]["audio"] = buf.getvalue()
         jobs[job_id]["progress"] = 1.0
         jobs[job_id]["done"] = True
     except Exception as e:
+        import traceback
+        print(f"[Tranquilicy] Job {job_id[:8]}: EXCEPTION {e}\n{traceback.format_exc()}", flush=True)
         jobs[job_id]["error"] = str(e)
         jobs[job_id]["done"] = True
+
 
 
 @app.post("/generate")
@@ -326,9 +342,8 @@ def generate(req: GenerateRequest, request: Request):
         q["generations"] += 1
         global_generations_today += 1
 
-    # Clamp duration: visitors strictly capped at 20s to prevent hardware tie-up
-    max_allowed_dur = MAX_DURATION if admin else 20.0
-    duration_sec = max(MIN_DURATION, min(max_allowed_dur, req.duration_sec))
+    # Full duration support: allows 60s, 90s, 120s, 180s with multi-pass continuation chaining
+    duration_sec = max(MIN_DURATION, min(MAX_DURATION, req.duration_sec))
     guidance_scale = max(1.0, min(10.0, req.guidance_scale))
 
     prompt = req.prompt.strip()[:800]
@@ -2239,16 +2254,6 @@ INDEX_HTML = """<!DOCTYPE html>
   <!-- GRAND MASTER AUDIO DECK & QUEUE RADAR                                     -->
   <!-- ========================================================================= -->
   <div class="master-deck" id="outbar">
-    <!-- Instant Sanctuary Showcase Strip (Zero wait preview for visitors) -->
-    <div class="showcase-strip" style="display:flex; align-items:center; gap:8px; padding:10px 14px; background:rgba(212,185,122,0.06); border:1px solid rgba(212,185,122,0.18); border-radius:12px; margin-bottom:14px; flex-wrap:wrap;">
-      <span style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--gold-text); display:flex; align-items:center; gap:5px;">
-        <span>⚡ Instant Studio Showcase:</span>
-      </span>
-      <button type="button" class="speed-pill" onclick="loadInstantSample('earth_pulse', 'Earth Pulse (Ambient Master)')" style="font-size:11px; padding:4px 10px; border:1px solid rgba(212,185,122,0.35); background:rgba(212,185,122,0.12); color:var(--gold-text); cursor:pointer;">▶ Earth Pulse</button>
-      <button type="button" class="speed-pill" onclick="loadInstantSample('sun_bleached_haze', 'Sun-Bleached Haze (Sunset Chill)')" style="font-size:11px; padding:4px 10px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.3); color:var(--text-2); cursor:pointer;">▶ Sun-Bleached Haze</button>
-      <button type="button" class="speed-pill" onclick="loadInstantSample('weightless_stillness', 'Weightless Stillness (Zen Meditation)')" style="font-size:11px; padding:4px 10px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.3); color:var(--text-2); cursor:pointer;">▶ Weightless Stillness</button>
-      <span style="font-size:10.5px; color:var(--text-3); margin-left:auto;">Zero wait · 1-click preview</span>
-    </div>
     <!-- Top Deck Bar: Status, Brand Equalizer, Title & Badges -->
     <div class="deck-top-bar">
       <div class="deck-identity">
@@ -4950,48 +4955,7 @@ async function checkFrontDoorCapacity(userTriggered = false) {
 
 
 
-async function loadInstantSample(trackId, title) {
-  try {
-    const api = getApiEndpoint();
-    const url = `${api}/lounge/track?track=${encodeURIComponent(trackId)}`;
-    const statusLabel = document.getElementById('statusLabel');
-    if (statusLabel) statusLabel.textContent = `Loading: ${title}...`;
-    
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Sample not found');
-    const blob = await res.blob();
-    
-    const player = document.getElementById('player');
-    const playerWrap = document.getElementById('playerWrap');
-    if (lastAudioUrl) URL.revokeObjectURL(lastAudioUrl);
-    const blobUrl = URL.createObjectURL(blob);
-    lastAudioUrl = blobUrl;
-    if (player) player.src = blobUrl;
 
-    if (playerWrap) {
-      playerWrap.hidden = false;
-      requestAnimationFrame(() => playerWrap.classList.add('ready'));
-    }
-
-    if (player) {
-      player.play().catch(err => console.warn('[Tranquilicy] Instant sample play:', err));
-    }
-
-    if (statusLabel) statusLabel.textContent = `Showcase: ${title}`;
-    const trackTitleInput = document.getElementById('trackTitle');
-    if (trackTitleInput) trackTitleInput.value = title;
-
-    flow.generated = true;
-    renderFlow();
-    unlockExportSteps();
-    updateDownloadNames();
-    refreshPreview();
-
-    if (typeof buildWaveformFromBlob === 'function') buildWaveformFromBlob(blob);
-  } catch (err) {
-    console.warn('[Tranquilicy] Error loading instant sample:', err);
-  }
-}
 
 
 
