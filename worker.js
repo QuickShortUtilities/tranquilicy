@@ -1,10 +1,9 @@
-// The RENDERED page, not the template. index.html keeps its __APP_VERSION__ /
-// __FORMAT_OPTIONS__ placeholders because the local server substitutes them at
-// request time; the Worker serves its import verbatim, so importing the
-// template shipped those literal placeholders to production (empty Format
-// dropdown, "v__APP_VERSION__" in the footer).
-// Regenerate with: python scripts/build_static.py
-import html from './dist/index.html';
+// Served verbatim -- no placeholder substitution happens at the edge, so
+// index.html must be committed fully rendered. If `__APP_VERSION__` or
+// `__FORMAT_OPTIONS__` ever reappear in it, production shows a literal
+// "v__APP_VERSION__" footer and an empty Format dropdown.
+// `python scripts/check_page.py` guards against exactly that.
+import html from './index.html';
 
 const GPU_BACKEND = 'https://clearly-gather-deviation-shorter.trycloudflare.com';
 

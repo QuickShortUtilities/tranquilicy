@@ -43,11 +43,6 @@ venv.bak/
 *.safetensors
 *.ckpt
 
-# Build output: everything except the rendered page the Cloudflare Worker
-# imports, which must be committed for the deploy to build.
-/dist/*
-!/dist/index.html
-
 # IDE / OS
 .vscode/
 .idea/

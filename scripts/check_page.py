@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-src = Path(r"C:\Users\Gaming PC\chillout-musicgen\scripts\09_api_server.py").read_text(encoding="utf-8")
+src = (Path(__file__).resolve().parent / "09_api_server.py").read_text(encoding="utf-8")
 
 start = src.index('INDEX_HTML = """') + len('INDEX_HTML = """')
 end = src.index('"""', start)
@@ -127,4 +127,23 @@ if not bad:
 leftover = [t for t in ("__APP_VERSION__", "__FORMAT_OPTIONS__") if t in page]
 print("Placeholders present in template (expected):", leftover)
 
-sys.exit(1 if missing or bad or stack or dupes or tag_bad or leftover_tags else 0)
+# worker.js serves index.html verbatim -- no substitution happens at the edge.
+# An unrendered placeholder there means production ships a literal
+# "v__APP_VERSION__" footer and a Format <select> with no <option> elements,
+# which renders as an empty, unusable dropdown. This shipped once already.
+deployed_path = Path(__file__).resolve().parent.parent / "index.html"
+deployed_bad = []
+if deployed_path.is_file():
+    deployed = deployed_path.read_text(encoding="utf-8", errors="replace")
+    deployed_bad = [t for t in ("__APP_VERSION__", "__FORMAT_OPTIONS__") if t in deployed]
+    if deployed_bad:
+        print(f"DEPLOY BLOCKER: index.html has unrendered placeholders {deployed_bad}")
+    elif not re.search(r'<option value="(WAV|FLAC|OGG|MP3)"', deployed):
+        deployed_bad = ["no format <option> elements"]
+        print("DEPLOY BLOCKER: index.html has no format <option> elements")
+    else:
+        print("OK: index.html is rendered and deployable")
+else:
+    print("note: index.html not found next to scripts/ (skipping deploy check)")
+
+sys.exit(1 if missing or bad or stack or dupes or tag_bad or leftover_tags or deployed_bad else 0)
