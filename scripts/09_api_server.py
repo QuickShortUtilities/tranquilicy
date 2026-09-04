@@ -18,7 +18,7 @@ import numpy as np
 import soundfile as sf
 import torch
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 from transformers import AutoModelForTextToWaveform, AutoProcessor, StoppingCriteria, StoppingCriteriaList
@@ -63,6 +63,42 @@ def gpu_status():
         "model": MODEL_ID,
         "version": APP_VERSION,
     }
+
+
+# ---- Security, IP Quotas & GPU Concurrency Queue ---------------------------
+MAX_GENERATIONS_PER_IP = 5
+MAX_DOWNLOADS_PER_IP = 5
+QUOTA_WINDOW_SEC = 86400.0  # 24 hours
+MAX_QUEUE_WAITING = 2       # max 2 jobs waiting in queue behind the 1 running
+
+ip_quotas = {}  # ip -> {"generations": int, "downloads": int, "window_start": float, "active_job_id": str | None}
+quota_lock = threading.Lock()
+
+def get_client_ip(request: Request) -> str:
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "127.0.0.1"
+
+def is_admin_ip(ip: str) -> bool:
+    return ip in ("127.0.0.1", "::1", "localhost") or ip.startswith("192.168.") or ip.startswith("10.")
+
+def get_or_create_quota(ip: str) -> dict:
+    now = time.time()
+    with quota_lock:
+        if ip not in ip_quotas or (now - ip_quotas[ip]["window_start"] > QUOTA_WINDOW_SEC):
+            ip_quotas[ip] = {
+                "generations": 0,
+                "downloads": 0,
+                "window_start": now,
+                "active_job_id": None
+            }
+        return ip_quotas[ip]
 
 jobs = {}  # job_id -> {progress, done, error, audio, created_at}
 gen_lock = threading.Lock()  # serialize GPU access -- two concurrent generate() calls on
@@ -177,6 +213,8 @@ def run_job(job_id: str, prompt: str, duration_sec: float, guidance_scale: float
         max_iterations = total_segments * 3 + 5
 
         with gen_lock:  # one generation at a time -- this model/GPU isn't safe for concurrent calls
+            if job_id in jobs:
+                jobs[job_id]["started"] = True
             # set inside the lock: the patched encoder-prep reads this global, so it
             # must not be visible to any other generation
             # every run assigns this before generating (None when there's nothing to
@@ -240,17 +278,53 @@ def run_job(job_id: str, prompt: str, duration_sec: float, guidance_scale: float
 
 
 @app.post("/generate")
-def generate(req: GenerateRequest):
+def generate(req: GenerateRequest, request: Request):
     prune_old_jobs()
+    ip = get_client_ip(request)
+    admin = is_admin_ip(ip)
+
+    # 1. Concurrency queue capacity check
+    waiting_jobs = [j for j in jobs.values() if not j["done"] and not j.get("started", False)]
+    if not admin and len(waiting_jobs) >= MAX_QUEUE_WAITING:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": f"Studio is currently at peak capacity ({len(waiting_jobs)} creators in queue). Please try again in 30 seconds."}
+        )
+
+    # 2. Per-IP quotas and single active job check
+    if not admin:
+        q = get_or_create_quota(ip)
+        # Check active job
+        active_id = q.get("active_job_id")
+        if active_id and active_id in jobs and not jobs[active_id]["done"]:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "You already have a generation running or in queue. Please wait for it to complete."}
+            )
+
+        # Check 5 generations limit
+        if q["generations"] >= MAX_GENERATIONS_PER_IP:
+            now = time.time()
+            hours_left = max(1, int((QUOTA_WINDOW_SEC - (now - q["window_start"])) / 3600))
+            return JSONResponse(
+                status_code=429,
+                content={"detail": f"Daily limit reached ({MAX_GENERATIONS_PER_IP}/{MAX_GENERATIONS_PER_IP} generations). Resets in ~{hours_left}h."}
+            )
+        q["generations"] += 1
+
     duration_sec = max(MIN_DURATION, min(MAX_DURATION, req.duration_sec))
     guidance_scale = max(1.0, min(10.0, req.guidance_scale))
 
-    prompt = req.prompt.strip()[:800]  # guard against pathologically long input; MusicGen's text
-                                        # encoder has a fixed context window, so more just gets wasted
+    prompt = req.prompt.strip()[:800]
     negative_prompt = req.negative_prompt.strip()[:400]
     job_id = str(uuid.uuid4())
-    jobs[job_id] = {"progress": 0.0, "done": False, "error": None, "audio": None,
-                    "cancelled": False, "created_at": time.time()}
+    jobs[job_id] = {
+        "progress": 0.0, "done": False, "error": None, "audio": None,
+        "cancelled": False, "created_at": time.time(), "ip": ip, "started": False
+    }
+    if not admin:
+        q["active_job_id"] = job_id
+
     threading.Thread(target=run_job,
                      args=(job_id, prompt, duration_sec, guidance_scale, negative_prompt, req.seed),
                      daemon=True).start()
@@ -279,14 +353,41 @@ def status(job_id: str):
     job = jobs.get(job_id)
     if job is None:
         return JSONResponse({"error": "unknown job"}, status_code=404)
-    return {"progress": job["progress"], "done": job["done"], "error": job["error"]}
+    
+    in_queue = not job.get("started", False) and not job["done"]
+    queue_pos = 0
+    est_sec = 0
+    if in_queue:
+        earlier_jobs = [j for j in jobs.values() if not j["done"] and j["created_at"] < job["created_at"]]
+        queue_pos = len(earlier_jobs) + 1
+        est_sec = queue_pos * 12
+
+    return {
+        "progress": job["progress"],
+        "done": job["done"],
+        "error": job["error"],
+        "in_queue": in_queue,
+        "queue_position": queue_pos,
+        "estimated_sec": est_sec
+    }
 
 
 @app.get("/result/{job_id}")
-def result(job_id: str):
+def result(job_id: str, request: Request):
     job = jobs.get(job_id)
     if job is None or job["audio"] is None:
         return JSONResponse({"error": "not ready"}, status_code=404)
+    
+    ip = get_client_ip(request)
+    if not is_admin_ip(ip):
+        q = get_or_create_quota(ip)
+        if q["downloads"] >= MAX_DOWNLOADS_PER_IP:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": f"Daily download limit ({MAX_DOWNLOADS_PER_IP}/{MAX_DOWNLOADS_PER_IP}) reached for this IP. Audio remains playable in browser."}
+            )
+        q["downloads"] += 1
+
     buf = io.BytesIO(job["audio"])
     return StreamingResponse(buf, media_type="audio/wav")
 
@@ -391,6 +492,36 @@ def apply_fades(audio: np.ndarray, file_sr: int, fade_in: float, fade_out: float
         env[n - n_out:] = 0.5 * (1 + np.cos(np.pi * t))
     return _apply_envelope(audio, env)
 
+
+
+@app.get("/quota")
+def quota(request: Request):
+    ip = get_client_ip(request)
+    admin = is_admin_ip(ip)
+    now = time.time()
+    queue_len = len([j for j in jobs.values() if not j["done"]])
+    if admin:
+        return {
+            "is_admin": True,
+            "generations_remaining": 999,
+            "generations_max": 999,
+            "downloads_remaining": 999,
+            "downloads_max": 999,
+            "queue_depth": queue_len,
+            "resets_in_sec": 0
+        }
+    q = get_or_create_quota(ip)
+    elapsed = now - q["window_start"]
+    resets_in = max(0, int(QUOTA_WINDOW_SEC - elapsed))
+    return {
+        "is_admin": False,
+        "generations_remaining": max(0, MAX_GENERATIONS_PER_IP - q["generations"]),
+        "generations_max": MAX_GENERATIONS_PER_IP,
+        "downloads_remaining": max(0, MAX_DOWNLOADS_PER_IP - q["downloads"]),
+        "downloads_max": MAX_DOWNLOADS_PER_IP,
+        "queue_depth": queue_len,
+        "resets_in_sec": resets_in
+    }
 
 @app.get("/master/{job_id}")
 def master(job_id: str, preset: str = "streaming", fade_in: float = 0.0, fade_out: float = 0.0,
@@ -712,6 +843,13 @@ INDEX_HTML = """<!DOCTYPE html>
   @media (max-width: 720px) { .rail-label { display: none; } .rail-line { margin: 0 8px; } }
   
   .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+  .quota-pill {
+    margin-left: auto; font-size: 11px; letter-spacing: .06em;
+    color: var(--gold-text); background: rgba(193,166,115,.12);
+    border: 1px solid rgba(193,166,115,.28); border-radius: 999px;
+    padding: 4px 10px; display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--ui); font-weight: 500; text-transform: uppercase;
+  }
   .step-badge {
     width: 27px; height: 27px; border-radius: 50%; border: 1px solid var(--line-hi);
     display: grid; place-items: center; font-size: 10px; color: var(--text-3); flex: none;
@@ -905,6 +1043,7 @@ INDEX_HTML = """<!DOCTYPE html>
     <div class="card-head">
       <span class="step-badge">01</span>
       <div class="card-title">Generate</div>
+      <div class="quota-pill" id="quotaPill">⚡ <span id="quotaText">5/5 Generations Left</span></div>
     </div>
     <div class="card-hint">Select an archetype or compose your vision using the prompter matrix.</div>
 
@@ -2063,11 +2202,15 @@ async function generate() {
       if (!sRes.ok) throw new Error('Status check failed: ' + sRes.status);
       const s = await sRes.json();
       if (s.error) throw new Error(s.error);
-      if (typeof s.progress === 'number') {
+      if (s.in_queue) {
+        btn.innerHTML = `<span class="spin-ring"></span> In Queue (#${s.queue_position})...`;
+        statusLabel.textContent = `In Queue (Position #${s.queue_position}) · Est. wait ~${s.estimated_sec}s`;
+      } else if (typeof s.progress === 'number') {
         const pct = Math.round(s.progress * 100);
         barInner.style.width = pct + '%';
         statusPct.textContent = pct + '%';
         btn.innerHTML = `<span class="spin-ring"></span> Synthesizing (${pct}%)...`;
+        statusLabel.textContent = dur > 30 ? 'Generating (chained on RTX 3090)...' : 'Generating on RTX 3090...';
       }
       if (s.done) break;
     }
@@ -2085,7 +2228,7 @@ async function generate() {
     requestAnimationFrame(() => playerWrap.classList.add('ready'));
     player.play().catch(() => {});
 
-    statusLabel.textContent = `Ready · ${dur}s`;
+    statusLabel.textContent = `Ready · ${dur}s`; refreshQuota();
     statusPct.textContent = '';
     btn.innerHTML = '✓ Track Ready!';
     setTimeout(() => { btn.innerHTML = origBtnHtml; }, 2200);
@@ -3077,7 +3220,26 @@ async function checkGpuStatus() {
 function openGpuModal() {
   document.getElementById('gpuEndpointInput').value = getApiEndpoint();
   document.getElementById('gpuModal').style.display = 'flex';
-  checkGpuStatus();
+  
+// ---- Quota & Concurrency State Tracker ----
+async function refreshQuota() {
+  const quotaText = document.getElementById('quotaText');
+  if (!quotaText) return;
+  try {
+    const res = await fetch(getApiUrl('/quota'));
+    if (res.ok) {
+      const data = await res.json();
+      if (data.is_admin) {
+        quotaText.textContent = 'Admin · Unlimited';
+      } else {
+        quotaText.textContent = `${data.generations_remaining}/${data.generations_max} Left Today`;
+      }
+    }
+  } catch(e) {}
+}
+
+checkGpuStatus();
+refreshQuota();
 }
 
 function closeGpuModal() {

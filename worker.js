@@ -2,12 +2,31 @@ import html from './index.html';
 
 const GPU_BACKEND = 'https://clearly-gather-deviation-shorter.trycloudflare.com';
 
+// Edge in-memory IP rate limiter (resets when isolate recycles)
+const edgeRateStore = new Map(); // ip -> [timestamps]
+
+function checkEdgeRateLimit(ip) {
+  if (!ip) return true;
+  const now = Date.now();
+  const windowMs = 60000; // 1 minute
+  const maxCallsPerMin = 45; // allows frequent status polling but blocks abusive flooding
+
+  let timestamps = edgeRateStore.get(ip) || [];
+  timestamps = timestamps.filter(t => now - t < windowMs);
+  if (timestamps.length >= maxCallsPerMin) {
+    return false;
+  }
+  timestamps.push(now);
+  edgeRateStore.set(ip, timestamps);
+  return true;
+}
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
 
     // Proxy GPU backend API routes directly to the local RTX 3090 tunnel
-    const apiRoutes = ['/generate', '/status/', '/result/', '/gpu', '/cancel/', '/master/'];
+    const apiRoutes = ['/generate', '/status/', '/result/', '/gpu', '/cancel/', '/master/', '/quota'];
     if (apiRoutes.some(route => url.pathname.startsWith(route))) {
       // Handle CORS preflight
       if (request.method === 'OPTIONS') {
@@ -22,9 +41,25 @@ export default {
         });
       }
 
+      const clientIp = request.headers.get('CF-Connecting-IP') || request.headers.get('x-real-ip') || '';
+
+      // Edge rate-limit check for aggressive flooding
+      if (clientIp && !checkEdgeRateLimit(clientIp)) {
+        return new Response(JSON.stringify({ detail: 'Edge rate limit exceeded. Please slow down.' }), {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
+      }
+
       const targetUrl = new URL(url.pathname + url.search, GPU_BACKEND);
       const headers = new Headers(request.headers);
       headers.delete('host');
+      if (clientIp) {
+        headers.set('CF-Connecting-IP', clientIp);
+      }
 
       const proxyInit = {
         method: request.method,

@@ -256,6 +256,13 @@
   @media (max-width: 720px) { .rail-label { display: none; } .rail-line { margin: 0 8px; } }
   
   .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+  .quota-pill {
+    margin-left: auto; font-size: 11px; letter-spacing: .06em;
+    color: var(--gold-text); background: rgba(193,166,115,.12);
+    border: 1px solid rgba(193,166,115,.28); border-radius: 999px;
+    padding: 4px 10px; display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--ui); font-weight: 500; text-transform: uppercase;
+  }
   .step-badge {
     width: 27px; height: 27px; border-radius: 50%; border: 1px solid var(--line-hi);
     display: grid; place-items: center; font-size: 10px; color: var(--text-3); flex: none;
@@ -449,6 +456,7 @@
     <div class="card-head">
       <span class="step-badge">01</span>
       <div class="card-title">Generate</div>
+      <div class="quota-pill" id="quotaPill">⚡ <span id="quotaText">5/5 Generations Left</span></div>
     </div>
     <div class="card-hint">Select an archetype or compose your vision using the prompter matrix.</div>
 
@@ -1607,11 +1615,15 @@ async function generate() {
       if (!sRes.ok) throw new Error('Status check failed: ' + sRes.status);
       const s = await sRes.json();
       if (s.error) throw new Error(s.error);
-      if (typeof s.progress === 'number') {
+      if (s.in_queue) {
+        btn.innerHTML = `<span class="spin-ring"></span> In Queue (#${s.queue_position})...`;
+        statusLabel.textContent = `In Queue (Position #${s.queue_position}) · Est. wait ~${s.estimated_sec}s`;
+      } else if (typeof s.progress === 'number') {
         const pct = Math.round(s.progress * 100);
         barInner.style.width = pct + '%';
         statusPct.textContent = pct + '%';
         btn.innerHTML = `<span class="spin-ring"></span> Synthesizing (${pct}%)...`;
+        statusLabel.textContent = dur > 30 ? 'Generating (chained on RTX 3090)...' : 'Generating on RTX 3090...';
       }
       if (s.done) break;
     }
@@ -1629,7 +1641,7 @@ async function generate() {
     requestAnimationFrame(() => playerWrap.classList.add('ready'));
     player.play().catch(() => {});
 
-    statusLabel.textContent = `Ready · ${dur}s`;
+    statusLabel.textContent = `Ready · ${dur}s`; refreshQuota();
     statusPct.textContent = '';
     btn.innerHTML = '✓ Track Ready!';
     setTimeout(() => { btn.innerHTML = origBtnHtml; }, 2200);
@@ -2621,7 +2633,26 @@ async function checkGpuStatus() {
 function openGpuModal() {
   document.getElementById('gpuEndpointInput').value = getApiEndpoint();
   document.getElementById('gpuModal').style.display = 'flex';
-  checkGpuStatus();
+  
+// ---- Quota & Concurrency State Tracker ----
+async function refreshQuota() {
+  const quotaText = document.getElementById('quotaText');
+  if (!quotaText) return;
+  try {
+    const res = await fetch(getApiUrl('/quota'));
+    if (res.ok) {
+      const data = await res.json();
+      if (data.is_admin) {
+        quotaText.textContent = 'Admin · Unlimited';
+      } else {
+        quotaText.textContent = `${data.generations_remaining}/${data.generations_max} Left Today`;
+      }
+    }
+  } catch(e) {}
+}
+
+checkGpuStatus();
+refreshQuota();
 }
 
 function closeGpuModal() {
