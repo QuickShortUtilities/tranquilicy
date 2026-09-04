@@ -1,4 +1,10 @@
-import html from './index.html';
+// The RENDERED page, not the template. index.html keeps its __APP_VERSION__ /
+// __FORMAT_OPTIONS__ placeholders because the local server substitutes them at
+// request time; the Worker serves its import verbatim, so importing the
+// template shipped those literal placeholders to production (empty Format
+// dropdown, "v__APP_VERSION__" in the footer).
+// Regenerate with: python scripts/build_static.py
+import html from './dist/index.html';
 
 const GPU_BACKEND = 'https://clearly-gather-deviation-shorter.trycloudflare.com';
 

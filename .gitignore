@@ -7,7 +7,6 @@ __pycache__/
 env/
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -43,6 +42,11 @@ venv.bak/
 *.bin
 *.safetensors
 *.ckpt
+
+# Build output: everything except the rendered page the Cloudflare Worker
+# imports, which must be committed for the deploy to build.
+/dist/*
+!/dist/index.html
 
 # IDE / OS
 .vscode/
