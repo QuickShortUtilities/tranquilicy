@@ -54,7 +54,7 @@ app.add_middleware(
 def gpu_status():
     return {
         "status": "ready",
-        "engine": "Tranquil Neural Core",
+        "engine": "Tranquil Soul Studio",
         "state": "operational",
         "version": APP_VERSION,
     }
@@ -543,8 +543,8 @@ def lounge_info():
     return {
         "artist": "Tranquil Soul Music",
         "current_track": "Earth Pulse (Ambient Chillout Master)",
-        "spotify_url": "https://open.spotify.com/artist/4Z8W4fKeB5YxbusRsdQVPb",
-        "spotify_embed": "https://open.spotify.com/embed/artist/4Z8W4fKeB5YxbusRsdQVPb?utm_source=generator&theme=0"
+        "spotify_url": "https://open.spotify.com/artist/4vAxYA9zh9HHWSVgOHvGrv",
+        "spotify_embed": "https://open.spotify.com/embed/artist/4vAxYA9zh9HHWSVgOHvGrv?utm_source=generator&theme=0"
     }
 
 
@@ -1641,7 +1641,7 @@ INDEX_HTML = """<!DOCTYPE html>
     <span class="front-door-kicker">TRANQUIL SOUL MUSIC STUDIO</span>
     <h1 class="front-door-headline">We're really busy right now, but come back soon to make some music.</h1>
     <p class="front-door-subtitle">
-      Our neural synthesis engine is currently creating at peak capacity for active creators. 
+      Our creative studio is currently crafting soundscapes at peak capacity for active creators. 
       Please make yourself comfortable in the sanctuary lounge—listen to Tranquil Soul Music on Spotify or enjoy our ambient background stream while we hold your place.
     </p>
 
@@ -1673,13 +1673,13 @@ INDEX_HTML = """<!DOCTYPE html>
           <iframe 
             id="spotifyEmbedFrame"
             style="border-radius:12px; width:100%; height:152px; border:0;" 
-            src="https://open.spotify.com/embed/artist/4Z8W4fKeB5YxbusRsdQVPb?utm_source=generator&theme=0" 
+            src="https://open.spotify.com/embed/artist/4vAxYA9zh9HHWSVgOHvGrv?utm_source=generator&theme=0" 
             allowfullscreen="" 
             allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
             loading="lazy">
           </iframe>
         </div>
-        <a href="https://open.spotify.com/artist/4Z8W4fKeB5YxbusRsdQVPb" target="_blank" rel="noopener noreferrer" class="spotify-link-btn" id="spotifyExternalLink">
+        <a href="https://open.spotify.com/artist/4vAxYA9zh9HHWSVgOHvGrv" target="_blank" rel="noopener noreferrer" class="spotify-link-btn" id="spotifyExternalLink">
           Listen to Tranquil Soul Music on Spotify ↗
         </a>
       </div>
@@ -1736,7 +1736,7 @@ INDEX_HTML = """<!DOCTYPE html>
     </div>
     <div class="gpu-badge" id="gpuBadge" onclick="openGpuModal()">
       <span class="gpu-dot"></span>
-      <span id="gpuLabel">Studio Engine: Online</span>
+      <span id="gpuLabel">Tranquil Soul Studio · Online</span>
     </div>
   </div>
 
@@ -1744,7 +1744,7 @@ INDEX_HTML = """<!DOCTYPE html>
     <div class="modal-card">
       <div class="card-head" style="margin-bottom:12px">
         <span class="step-badge">✦</span>
-        <div class="card-title">Tranquilicy Neural Engine</div>
+        <div class="card-title">Tranquil Soul Music Studio</div>
       </div>
       <div class="hint" style="margin-bottom:18px; font-size:12.5px; line-height:1.6;">
         Tranquilicy Creative Studio crafts high-fidelity ambient, chillout, and meditative audio directly from multi-dimensional latent sonic coordinates.
@@ -2280,7 +2280,7 @@ INDEX_HTML = """<!DOCTYPE html>
       <div class="deck-badges">
         <span class="badge-chip" id="masterLosslessBadge">24-BIT 48kHz LOSSLESS</span>
         <span class="badge-chip gold" id="masterMoodBadge">Zen Harmonic · 432Hz</span>
-        <span class="badge-chip" id="masterGpuBadge">✦ NEURAL CORE</span>
+        <span class="badge-chip" id="masterGpuBadge">✦ STUDIO ACTIVE</span>
       </div>
     </div>
 
@@ -3159,7 +3159,7 @@ async function generate() {
   cancelBtn.style.display = 'inline-block';
   barInner.style.width = '0%';
   statusPct.textContent = '0%';
-  statusLabel.textContent = 'Synthesizing neural audio...';
+  statusLabel.textContent = 'Crafting your soundscape...';
 
   ['downloadBtn', 'masterChip', 'downloadVideoBtn', 'stillChip'].forEach(id => setChip(id, null));
   [lastVideoUrl, lastMasterUrl, lastStillUrl].forEach(u => { if (u) URL.revokeObjectURL(u); });
@@ -3227,7 +3227,7 @@ async function generate() {
           barInner.style.width = Math.max(3, pct) + '%';
           statusPct.textContent = pct + '%';
           btn.innerHTML = `<span class="spin-ring"></span> Synthesizing (${pct}%)...`;
-          statusLabel.textContent = 'Synthesizing neural audio...';
+          statusLabel.textContent = 'Crafting your soundscape...';
         }
       }
       if (s.done) {
@@ -4812,7 +4812,7 @@ function saveStillFrame() {
 })();
 
 
-// ---- Neural Studio API Endpoint Resolver ----
+// ---- Studio API Endpoint Resolver ----
 const DEFAULT_GPU_TUNNEL = 'https://clearly-gather-deviation-shorter.trycloudflare.com';
 
 function getApiEndpoint() {
@@ -4841,8 +4841,8 @@ async function checkGpuStatus() {
     if (res.ok) {
       const data = await res.json();
       badge.className = 'gpu-badge online';
-      label.textContent = `Tranquil Neural Core · Online`;
-      document.getElementById('gpuStatusText').textContent = `Tranquil Neural Engine · Operational`;
+      label.textContent = `Tranquil Soul Studio · Online`;
+      document.getElementById('gpuStatusText').textContent = `Tranquil Soul Studio · Online`;
       return true;
     }
   } catch(e) {}
