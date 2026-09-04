@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
@@ -1840,6 +1840,14 @@ let lastVideoUrl = null;
 let lastMasterUrl = null;
 let lastStillUrl = null;
 let currentJobId = null;
+
+
+function humanSize(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
 
 function setChip(id, url, filename, label) {
   const chip = document.getElementById(id);
@@ -4202,8 +4210,12 @@ async function checkGpuStatus() {
     if (res.ok) {
       const data = await res.json();
       badge.className = 'gpu-badge online';
-      label.textContent = `Tranquil Soul Studio · Online`;
-      document.getElementById('gpuStatusText').textContent = `Tranquil Soul Studio · Online`;
+      label.textContent = `Tranquil Soul Studio — Online`;
+      if (data.total_generations !== undefined) {
+        const tLab = document.getElementById('tickerLabel');
+        if (tLab) tLab.textContent = data.total_generations + ' Tracks Crafted This Week';
+      }
+      document.getElementById('gpuStatusText').textContent = `Tranquil Soul Studio — Online`;
       return true;
     }
   } catch(e) {}
