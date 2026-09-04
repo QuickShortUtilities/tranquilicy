@@ -23,6 +23,29 @@
   #featherCanvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
   .wrap { position: relative; z-index: 1; max-width: var(--max); margin: 0 auto; padding: 60px 24px 60px; }
   
+  
+  /* ---- GPU Status Badge & Modal ---- */
+  .brand-wrap { display: flex; justify-content: space-between; align-items: center; margin-bottom: 34px; flex-wrap: wrap; gap: 14px; }
+  .gpu-badge {
+    display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px;
+    background: var(--bg-2); border: 1px solid var(--line); border-radius: 999px;
+    font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-2);
+    cursor: pointer; transition: all .2s var(--ease); box-shadow: var(--lift);
+  }
+  .gpu-badge:hover { border-color: var(--gold); background: var(--bg-3); }
+  .gpu-dot { width: 7px; height: 7px; border-radius: 50%; background: #9A9188; transition: all .3s var(--ease); }
+  .gpu-badge.online .gpu-dot { background: #4ADE80; box-shadow: 0 0 10px rgba(74,222,128,.7); }
+  .gpu-badge.offline .gpu-dot { background: #F87171; box-shadow: 0 0 8px rgba(248,113,113,.5); }
+  
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.75); backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center; z-index: 10000; padding: 20px;
+  }
+  .modal-card {
+    background: var(--bg-2); border: 1px solid var(--line-hi); border-radius: var(--radius);
+    padding: 28px; max-width: 480px; width: 100%; box-shadow: 0 12px 48px rgba(0,0,0,.8);
+  }
+
   .brand { display: flex; align-items: center; gap: 14px; margin-bottom: 36px; }
   .brand .ring { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--gold); position: relative; flex: none; box-shadow: 0 0 16px var(--gold-glow); }
   .brand .ring::after { content: ""; position: absolute; inset: 8px; border-radius: 50%; border: 1.5px solid var(--gold-glow); }
@@ -346,11 +369,38 @@
 <div id="customCursorRing"></div>
 <canvas id="featherCanvas"></canvas>
 <div class="wrap">
-  <div class="brand">
-    <div class="ring"></div>
-    <div class="brand-title">
-      <span>Tranquil Soul Music</span>
-      <span>Tranquilicy Creative Studio</span>
+  <div class="brand-wrap">
+    <div class="brand">
+      <div class="ring"></div>
+      <div class="brand-title">
+        <span>Tranquil Soul Music</span>
+        <span>Tranquilicy Creative Studio</span>
+      </div>
+    </div>
+    <div class="gpu-badge" id="gpuBadge" onclick="openGpuModal()">
+      <span class="gpu-dot"></span>
+      <span id="gpuLabel">Local GPU: Checking...</span>
+    </div>
+  </div>
+
+  <div id="gpuModal" class="modal-overlay" style="display:none">
+    <div class="modal-card">
+      <div class="card-head" style="margin-bottom:12px">
+        <span class="step-badge">GPU</span>
+        <div class="card-title">Local RTX 3090 Pipeline</div>
+      </div>
+      <div class="hint" style="margin-bottom:18px">
+        Tranquilicy runs directly on your local NVIDIA GeForce RTX 3090 GPU (24GB VRAM) with zero cloud GPU fees.
+      </div>
+      <div class="field">
+        <label>Backend GPU Server URL</label>
+        <input type="text" id="gpuEndpointInput" placeholder="http://localhost:8000 or Cloudflare Tunnel URL">
+        <div class="hint" id="gpuStatusText">Testing connection to local backend...</div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:24px">
+        <button type="button" class="btn-primary" id="gpuSaveBtn" style="margin:0" onclick="saveGpuEndpoint()">Save & Test</button>
+        <button type="button" class="btn-ghost" id="gpuCloseBtn" style="margin:0" onclick="closeGpuModal()">Close</button>
+      </div>
     </div>
   </div>
   <h1>Create a track</h1>
@@ -1387,7 +1437,7 @@ async function generate() {
   renderFlow();
 
   try {
-    const startRes = await fetch('/generate', {
+    const startRes = await fetch(getApiUrl('/generate'), {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
@@ -1402,7 +1452,7 @@ async function generate() {
 
     while (true) {
       await new Promise(r => setTimeout(r, 400));
-      const s = await (await fetch('/status/' + job_id)).json();
+      const s = await (await fetch(getApiUrl('/status/' + job_id))).json();
       if (s.error) throw new Error(s.error);
       if (typeof s.progress === 'number') {
         const pct = Math.round(s.progress * 100);
@@ -1412,7 +1462,7 @@ async function generate() {
       if (s.done) break;
     }
 
-    const audioRes = await fetch('/result/' + job_id);
+    const audioRes = await fetch(getApiUrl('/result/' + job_id));
     const blob = await audioRes.blob();
     if (lastAudioUrl) URL.revokeObjectURL(lastAudioUrl);
     const url = URL.createObjectURL(blob);
@@ -1457,7 +1507,7 @@ async function cancelGeneration() {
   const cancelBtn = document.getElementById('cancelBtn');
   cancelBtn.textContent = 'Cancelling...';
   try {
-    await fetch('/cancel/' + currentJobId, { method: 'POST' });
+    await fetch(getApiUrl('/cancel/' + currentJobId), { method: 'POST' });
   } catch (e) {}
   cancelBtn.textContent = 'Cancel';
 }
@@ -1666,7 +1716,7 @@ async function downloadMastered() {
       fade_in: document.getElementById('fadeIn').value,
       fade_out: document.getElementById('fadeOut').value,
     });
-    const res = await fetch(`/master/${currentJobId}?${params}`);
+    const res = await fetch(getApiUrl(`/master/${currentJobId}?${params}`));
     if (!res.ok) throw new Error('Server error: ' + res.status);
     const blob = await res.blob();
     if (lastMasterUrl) URL.revokeObjectURL(lastMasterUrl);
@@ -2435,6 +2485,62 @@ function setupStarChartDrag() {
   }
   requestAnimationFrame(renderCursor);
 })();
+
+
+// ---- Local GPU API Endpoint Resolver ----
+function getApiEndpoint() {
+  const stored = localStorage.getItem('tranquilicy_gpu_endpoint');
+  if (stored) return stored.replace(/\/+$/, '');
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  return isLocal ? '' : 'http://localhost:8000';
+}
+function getApiUrl(path) {
+  const base = getApiEndpoint();
+  return base ? (base + (path.startsWith('/') ? path : '/' + path)) : path;
+}
+
+async function checkGpuStatus() {
+  const badge = document.getElementById('gpuBadge');
+  const label = document.getElementById('gpuLabel');
+  try {
+    const res = await fetch(getApiUrl('/gpu'), { method: 'GET', headers: { 'Accept': 'application/json' } });
+    if (res.ok) {
+      const data = await res.json();
+      badge.className = 'gpu-badge online';
+      label.textContent = `${data.gpu_name || 'RTX 3090'} · Local GPU Online`;
+      document.getElementById('gpuStatusText').textContent = `Connected: ${data.gpu_name} (${data.vram_allocated_gb}GB / ${data.vram_total_gb}GB VRAM in use)`;
+      return true;
+    }
+  } catch(e) {}
+  badge.className = 'gpu-badge offline';
+  label.textContent = 'Local GPU Offline (Click to configure)';
+  document.getElementById('gpuStatusText').textContent = 'Cannot reach GPU server. Make sure python 09_api_server.py is running.';
+  return false;
+}
+
+function openGpuModal() {
+  document.getElementById('gpuEndpointInput').value = getApiEndpoint();
+  document.getElementById('gpuModal').style.display = 'flex';
+  checkGpuStatus();
+}
+
+function closeGpuModal() {
+  document.getElementById('gpuModal').style.display = 'none';
+}
+
+async function saveGpuEndpoint() {
+  const val = document.getElementById('gpuEndpointInput').value.trim();
+  localStorage.setItem('tranquilicy_gpu_endpoint', val);
+  document.getElementById('gpuStatusText').textContent = 'Testing connection...';
+  const ok = await checkGpuStatus();
+  if (ok) {
+    setTimeout(closeGpuModal, 800);
+  }
+}
+
+// Initial GPU check
+checkGpuStatus();
+setInterval(checkGpuStatus, 15000);
 
 </script>
 </body>
