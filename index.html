@@ -317,7 +317,17 @@
 
   /* ---- Luxury Custom Gold Cursor ---- */
   @media (hover: hover) and (pointer: fine) {
-    body, button, a, input, select, textarea, .knob, .tag-chip, .archetype-btn, .title-pill, .speed-btn {
+    body.has-custom-cursor,
+    body.has-custom-cursor button,
+    body.has-custom-cursor a,
+    body.has-custom-cursor input,
+    body.has-custom-cursor select,
+    body.has-custom-cursor textarea,
+    body.has-custom-cursor .knob,
+    body.has-custom-cursor .tag-chip,
+    body.has-custom-cursor .archetype-btn,
+    body.has-custom-cursor .title-pill,
+    body.has-custom-cursor .speed-btn {
       cursor: none !important;
     }
     #customCursorDot {
@@ -1033,6 +1043,86 @@ function buildDials() {
     knobEl.addEventListener('pointerup', stop);
     knobEl.addEventListener('pointercancel', stop);
   });
+}
+
+// ---- Star Chart Drag: grab a vertex directly ----
+let draggingDialKey = null, hoverDialKey = null;
+function setupStarChartDrag() {
+  const svg = document.getElementById('starChart');
+  const cx = 90, cy = 90, maxR = 68;
+  const n = DIALS.length;
+  const angleFor = i => -Math.PI / 2 + i * (2 * Math.PI / n);
+
+  function svgPoint(e) {
+    const rect = svg.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (180 / rect.width),
+      y: (e.clientY - rect.top) * (180 / rect.height),
+    };
+  }
+
+  function nearestVertex(p) {
+    let best = null, bestDist = Infinity;
+    DIALS.forEach((d, i) => {
+      const a = angleFor(i);
+      const frac = knobs[d.key].value / 100;
+      const vx = cx + Math.cos(a) * maxR * frac, vy = cy + Math.sin(a) * maxR * frac;
+      const dist = Math.hypot(p.x - vx, p.y - vy);
+      if (dist < bestDist) { bestDist = dist; best = { key: d.key, i, dist }; }
+    });
+    return best;
+  }
+
+  function valueFromPointer(p, i) {
+    const a = angleFor(i);
+    const proj = (p.x - cx) * Math.cos(a) + (p.y - cy) * Math.sin(a);
+    return Math.max(0, Math.min(100, (proj / maxR) * 100));
+  }
+
+  const GRAB_RADIUS = 22;
+
+  svg.addEventListener('pointerdown', e => {
+    const p = svgPoint(e);
+    const nearest = nearestVertex(p);
+    if (!nearest || nearest.dist > GRAB_RADIUS) return;
+    draggingDialKey = nearest.key;
+    svg.setPointerCapture(e.pointerId);
+    document.body.classList.add('dragging-star');
+    knobs[nearest.key].set(valueFromPointer(p, nearest.i));
+    drawStarChart();
+    e.preventDefault();
+  });
+
+  svg.addEventListener('pointermove', e => {
+    const p = svgPoint(e);
+    if (!draggingDialKey) {
+      const nearest = nearestVertex(p);
+      const overHandle = nearest && nearest.dist <= GRAB_RADIUS;
+      if (hoverDialKey !== (overHandle ? nearest.key : null)) {
+        hoverDialKey = overHandle ? nearest.key : null;
+        drawStarChart();
+      }
+      svg.style.cursor = overHandle ? 'grab' : 'default';
+      return;
+    }
+    const i = DIALS.findIndex(d => d.key === draggingDialKey);
+    knobs[draggingDialKey].set(valueFromPointer(p, i));
+    drawStarChart();
+  });
+
+  svg.addEventListener('pointerleave', () => {
+    if (hoverDialKey !== null) { hoverDialKey = null; drawStarChart(); }
+  });
+
+  const stop = () => {
+    if (!draggingDialKey) return;
+    draggingDialKey = null;
+    document.body.classList.remove('dragging-star');
+    drawStarChart();
+  };
+  svg.addEventListener('pointerup', stop);
+  svg.addEventListener('pointercancel', stop);
+  svg.addEventListener('lostpointercapture', stop);
 }
 
 function drawStarChart() {
@@ -2353,85 +2443,7 @@ function saveStillFrame() {
   }, 'image/png');
 }
 
-// ---- Star Chart Drag: grab a vertex directly ----
-let draggingDialKey = null, hoverDialKey = null;
-function setupStarChartDrag() {
-  const svg = document.getElementById('starChart');
-  const cx = 90, cy = 90, maxR = 68;
-  const n = DIALS.length;
-  const angleFor = i => -Math.PI / 2 + i * (2 * Math.PI / n);
 
-  function svgPoint(e) {
-    const rect = svg.getBoundingClientRect();
-    return {
-      x: (e.clientX - rect.left) * (180 / rect.width),
-      y: (e.clientY - rect.top) * (180 / rect.height),
-    };
-  }
-
-  function nearestVertex(p) {
-    let best = null, bestDist = Infinity;
-    DIALS.forEach((d, i) => {
-      const a = angleFor(i);
-      const frac = knobs[d.key].value / 100;
-      const vx = cx + Math.cos(a) * maxR * frac, vy = cy + Math.sin(a) * maxR * frac;
-      const dist = Math.hypot(p.x - vx, p.y - vy);
-      if (dist < bestDist) { bestDist = dist; best = { key: d.key, i, dist }; }
-    });
-    return best;
-  }
-
-  function valueFromPointer(p, i) {
-    const a = angleFor(i);
-    const proj = (p.x - cx) * Math.cos(a) + (p.y - cy) * Math.sin(a);
-    return Math.max(0, Math.min(100, (proj / maxR) * 100));
-  }
-
-  const GRAB_RADIUS = 22;
-
-  svg.addEventListener('pointerdown', e => {
-    const p = svgPoint(e);
-    const nearest = nearestVertex(p);
-    if (!nearest || nearest.dist > GRAB_RADIUS) return;
-    draggingDialKey = nearest.key;
-    svg.setPointerCapture(e.pointerId);
-    document.body.classList.add('dragging-star');
-    knobs[nearest.key].set(valueFromPointer(p, nearest.i));
-    drawStarChart();
-    e.preventDefault();
-  });
-
-  svg.addEventListener('pointermove', e => {
-    const p = svgPoint(e);
-    if (!draggingDialKey) {
-      const nearest = nearestVertex(p);
-      const overHandle = nearest && nearest.dist <= GRAB_RADIUS;
-      if (hoverDialKey !== (overHandle ? nearest.key : null)) {
-        hoverDialKey = overHandle ? nearest.key : null;
-        drawStarChart();
-      }
-      svg.style.cursor = overHandle ? 'grab' : 'default';
-      return;
-    }
-    const i = DIALS.findIndex(d => d.key === draggingDialKey);
-    knobs[draggingDialKey].set(valueFromPointer(p, i));
-    drawStarChart();
-  });
-
-  svg.addEventListener('pointerleave', () => {
-    if (hoverDialKey !== null) { hoverDialKey = null; drawStarChart(); }
-  });
-
-  const stop = () => {
-    if (!draggingDialKey) return;
-    draggingDialKey = null;
-    document.body.classList.remove('dragging-star');
-    drawStarChart();
-  };
-  svg.addEventListener('pointerup', stop);
-  svg.addEventListener('pointercancel', stop);
-  svg.addEventListener('lostpointercapture', stop);
-}
 
 // ---- Custom Luxury Gold Cursor ----
 (function() {
@@ -2448,7 +2460,7 @@ function setupStarChartDrag() {
     mouseY = e.clientY;
     if (!isVisible) {
       isVisible = true;
-      document.body.classList.remove('cursor-hidden');
+      document.body.classList.remove('cursor-hidden'); document.body.classList.add('has-custom-cursor');
       ringX = mouseX;
       ringY = mouseY;
     }
