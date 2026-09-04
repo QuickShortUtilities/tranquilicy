@@ -1153,10 +1153,9 @@
 
     <div class="row">
       <label style="margin:0">Duration</label>
-      <span class="val"><span id="durVal">20</span>s</span>
+      <span class="val"><span id="durVal">20</span>s <span id="durMultiPass" style="display:none; font-size:10px; opacity:.6; font-style:italic;">multi-pass</span></span>
     </div>
     <input type="range" id="duration" min="5" max="300" value="20">
-    <div class="hint" id="durHint">Tracks over 30s use multi-pass synthesis — generation takes longer.</div>
 
     <div class="card-actions">
       <button id="genBtn" class="btn-primary" onclick="generate()">Generate Track</button>
@@ -1814,14 +1813,8 @@
 document.getElementById('duration').oninput = e => {
   const v = parseInt(e.target.value);
   document.getElementById('durVal').textContent = v;
-  const hint = document.getElementById('durHint');
-  if (hint) {
-    if (v <= 20) hint.textContent = 'Quick 1-pass generation (~30\u201360s wait).';
-    else if (v <= 30) hint.textContent = 'Single-pass generation (~45\u201390s wait).';
-    else if (v <= 60) hint.textContent = 'Multi-pass synthesis \u2014 expect 2\u20134\u00d7 longer generation time.';
-    else if (v <= 120) hint.textContent = 'Extended multi-pass \u2014 4\u20138\u00d7 longer generation. Worth the wait!';
-    else hint.textContent = 'Long-form multi-pass synthesis \u2014 8\u00d7+ generation time. Perfect for deep sessions.';
-  }
+  const mp = document.getElementById('durMultiPass');
+  if (mp) mp.style.display = v > 30 ? 'inline' : 'none';
 };
 
 let lastAudioUrl = null;
