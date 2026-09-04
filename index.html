@@ -303,7 +303,9 @@
   /* GRAND MASTER AUDIO DECK & QUEUE RADAR (100x Luxury Edition)               */
   /* ========================================================================= */
   .master-deck {
-    margin-top: 32px;
+    /* matches the .layout column gap so the deck reads as a fourth block in
+       the same rhythm, not a detached slab */
+    margin-top: 24px;
     background: linear-gradient(160deg, rgba(22, 20, 18, 0.95) 0%, rgba(14, 13, 11, 0.98) 100%);
     border: 1px solid rgba(212, 185, 122, 0.28);
     border-radius: 20px;
@@ -1571,7 +1573,6 @@
     </div>
   </div>
   </div>
-  </div>
 
   <!-- SESSION TAKES LIBRARY TRAY -->
   <div class="take-library-section" id="takeLibrarySection" style="display:none">
@@ -1791,6 +1792,7 @@
     <audio id="player" preload="auto" style="display:none;"></audio>
     <div id="errorText" class="deck-error" style="display:none"></div>
   </div>
+  </div><!-- /.wrap -->
 
   <!-- STUDIO NOTICE MODAL FOR QUOTA / CAPACITY LIMITS -->
   <div id="studioNoticeModal" class="modal-overlay" style="display:none">
