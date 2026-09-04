@@ -4898,7 +4898,8 @@ async function checkGpuStatus() {
 function openGpuModal() {
   document.getElementById('gpuEndpointInput').value = getApiEndpoint();
   document.getElementById('gpuModal').style.display = 'flex';
-  
+}
+
 // ---- Quota & Concurrency State Tracker ----
 async function refreshQuota() {
   const quotaText = document.getElementById('quotaText');
@@ -4915,10 +4916,11 @@ async function refreshQuota() {
     }
   } catch(e) {}
 }
+window.refreshQuota = refreshQuota;
 
 checkGpuStatus();
 refreshQuota();
-}
+setInterval(refreshQuota, 30000);
 
 function closeGpuModal() {
   document.getElementById('gpuModal').style.display = 'none';
