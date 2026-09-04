@@ -328,6 +328,30 @@ def widen_stereo(audio: np.ndarray, file_sr: int, width: float) -> np.ndarray:
     return np.stack([mono + side, mono - side], axis=1).astype(np.float32)
 
 
+def apply_warmth(audio: np.ndarray, warmth: float) -> np.ndarray:
+    """Soft analog tape saturation using gentle cubic non-linearity."""
+    if warmth <= 0.0:
+        return audio
+    drive = 1.0 + warmth * 1.5
+    driven = audio * drive
+    sat = np.clip(driven, -1.5, 1.5)
+    sat = sat - (sat ** 3) / 6.0
+    return (sat / drive).astype(np.float32)
+
+
+def apply_air(audio: np.ndarray, air: float) -> np.ndarray:
+    """High-frequency air lift."""
+    if air <= 0.0:
+        return audio
+    diff = np.zeros_like(audio)
+    if audio.ndim == 1:
+        diff[1:] = audio[1:] - audio[:-1]
+    else:
+        diff[1:, :] = audio[1:, :] - audio[:-1, :]
+    out = audio + (air * 0.35) * diff
+    return np.clip(out, -0.99, 0.99).astype(np.float32)
+
+
 def apply_fades(audio: np.ndarray, file_sr: int, fade_in: float, fade_out: float) -> np.ndarray:
     """Raised-cosine fades -- smoother into and out of silence than a linear ramp."""
     n = len(audio)
@@ -345,7 +369,8 @@ def apply_fades(audio: np.ndarray, file_sr: int, fade_in: float, fade_out: float
 
 @app.get("/master/{job_id}")
 def master(job_id: str, preset: str = "streaming", fade_in: float = 0.0, fade_out: float = 0.0,
-           seamless: bool = False, width: float = 0.0, fmt: str = "WAV"):
+           seamless: bool = False, width: float = 0.0, fmt: str = "WAV",
+           warmth: float = 0.0, air: float = 0.0):
     job = jobs.get(job_id)
     if job is None or job["audio"] is None:
         return JSONResponse({"error": "not ready"}, status_code=404)
@@ -365,6 +390,10 @@ def master(job_id: str, preset: str = "streaming", fade_in: float = 0.0, fade_ou
     # it can lift the tails back off silence.
     if seamless:
         audio = make_seamless(audio, file_sr)
+    if warmth > 0:
+        audio = apply_warmth(audio, warmth)
+    if air > 0:
+        audio = apply_air(audio, air)
     if width > 0:
         audio = widen_stereo(audio, file_sr, width)
     if target_dbfs is not None:
@@ -405,38 +434,45 @@ INDEX_HTML = """
 <title>Tranquilicy Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&family=Montserrat:wght@300;400;500;600&family=Space+Grotesk:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
     --gold: #C1A673; --gold-deep: #A58B58; --gold-text: #D4B97A; --gold-glow: rgba(193,166,115,.18); --on-gold: #fff;
-    --bg: #090807; --bg-2: #100F0D; --bg-3: #181612;
+    --bg: #090807; --bg-2: #100F0D; --bg-3: #181612; --bg-4: #221F1A;
     --text: #F2EFE9; --text-2: #9A9188; --text-3: #524D48;
     --line: rgba(255,255,255,.07); --line-soft: rgba(255,255,255,.045); --line-hi: rgba(255,255,255,.13);
     --display: "Cormorant Garamond", Georgia, serif;
     --ui: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    --max: 1360px; --radius: 20px; --radius-sm: 12px; --radius-xs: 8px;
+    --max: 1380px; --radius: 20px; --radius-sm: 12px; --radius-xs: 8px;
     --lift: 0 1px 3px rgba(0,0,0,.5), 0 12px 32px rgba(0,0,0,.6);
     --ease: cubic-bezier(.22,.61,.36,1); --ease-out: cubic-bezier(.16,1,.3,1);
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--ui); font-weight: 300; overflow-x: hidden; }
   #featherCanvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
-  .wrap { position: relative; z-index: 1; max-width: var(--max); margin: 0 auto; padding: 72px 24px 60px; }
-  .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 48px; }
-  .brand .ring { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--gold); position: relative; flex: none; }
+  .wrap { position: relative; z-index: 1; max-width: var(--max); margin: 0 auto; padding: 60px 24px 60px; }
+  
+  .brand { display: flex; align-items: center; gap: 14px; margin-bottom: 36px; }
+  .brand .ring { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--gold); position: relative; flex: none; box-shadow: 0 0 16px var(--gold-glow); }
   .brand .ring::after { content: ""; position: absolute; inset: 8px; border-radius: 50%; border: 1.5px solid var(--gold-glow); }
-  .brand span { font-family: var(--ui); letter-spacing: .12em; text-transform: uppercase; font-size: 13px; color: var(--text-2); }
-  h1 { font-family: var(--display); font-weight: 400; font-style: italic; font-size: 40px; margin: 0 0 8px; color: var(--text); }
-  .sub { color: var(--text-2); font-size: 14px; margin-bottom: 40px; letter-spacing: .01em; }
-  .card { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; box-shadow: var(--lift); }
+  .brand-title { display: flex; flex-direction: column; }
+  .brand-title span:first-child { font-family: var(--ui); letter-spacing: .16em; text-transform: uppercase; font-size: 13px; font-weight: 500; color: var(--gold-text); }
+  .brand-title span:last-child { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); margin-top: 2px; }
+  
+  h1 { font-family: var(--display); font-weight: 400; font-style: italic; font-size: 42px; margin: 0 0 8px; color: var(--text); letter-spacing: .01em; }
+  .sub { color: var(--text-2); font-size: 14px; margin-bottom: 34px; letter-spacing: .01em; line-height: 1.5; }
+  .card { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; box-shadow: var(--lift); position: relative; }
+  
   label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--text-2); margin-bottom: 10px; }
-  textarea { width: 100%; min-height: 90px; margin-top: 10px; background: var(--bg-3); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px; font-family: var(--ui); font-size: 14px; font-weight: 300; resize: vertical; transition: border-color .2s var(--ease); }
-  textarea:focus { outline: none; border-color: var(--gold-glow); }
-  .row { display: flex; justify-content: space-between; align-items: center; margin-top: 26px; }
+  textarea { width: 100%; min-height: 96px; margin-top: 8px; background: var(--bg-3); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px; font-family: var(--ui); font-size: 13.5px; font-weight: 300; line-height: 1.5; resize: vertical; transition: border-color .2s var(--ease); }
+  textarea:focus { outline: none; border-color: var(--gold-glow); box-shadow: 0 0 0 3px rgba(193,166,115,.1); }
+  
+  .row { display: flex; justify-content: space-between; align-items: center; margin-top: 22px; }
   .row .val { color: var(--gold-text); font-family: var(--display); font-size: 18px; font-style: italic; }
-  input[type=range] { width: 100%; margin-top: 10px; accent-color: var(--gold); }
+  input[type=range] { width: 100%; margin-top: 8px; accent-color: var(--gold); }
+  
   .btn-primary {
-    width: 100%; margin-top: 28px; padding: 15px; border: none; border-radius: var(--radius-sm);
+    width: 100%; margin-top: 24px; padding: 15px; border: none; border-radius: var(--radius-sm);
     background: linear-gradient(180deg, var(--gold), var(--gold-deep)); color: var(--on-gold);
     font-family: var(--ui); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .14em;
     cursor: pointer; transition: transform .2s var(--ease-out), box-shadow .2s var(--ease-out);
@@ -445,101 +481,140 @@ INDEX_HTML = """
   .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 2px 6px rgba(0,0,0,.5), 0 16px 32px rgba(193,166,115,.38); }
   .btn-primary:active:not(:disabled) { transform: scale(.975); }
   .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+  
   .link-btn {
-    display: inline-block; padding: 0; border: none; background: none;
+    display: inline-flex; align-items: center; gap: 5px; padding: 0; border: none; background: none;
     font-family: var(--ui); font-weight: 400; font-size: 11px; text-transform: uppercase;
     letter-spacing: .1em; color: var(--gold-text); text-decoration: none; cursor: pointer;
-    transition: opacity .2s var(--ease);
+    transition: opacity .2s var(--ease), color .2s var(--ease);
   }
-  .link-btn:hover { opacity: .7; }
+  .link-btn:hover { opacity: .8; color: #fff; }
   .link-btn:focus-visible { outline: 2px solid var(--gold-glow); outline-offset: 3px; border-radius: 2px; }
+  
+  .action-row-mini { display: flex; gap: 10px; align-items: center; }
+  
   #barOuter { background: var(--bg-3); border: 1px solid var(--line); border-radius: 999px; height: 8px; overflow: hidden; }
   #barInner { background: linear-gradient(90deg, var(--gold-deep), var(--gold)); height: 100%; width: 0%; transition: width .3s var(--ease-out); border-radius: 999px; }
   #errorText { color: #e08a8a; font-size: 12px; margin-top: 10px; display: none; }
-  audio { width: 100%; margin-top: 20px; border-radius: var(--radius-xs); }
+  
+  audio { width: 100%; margin-top: 14px; border-radius: var(--radius-xs); }
   audio::-webkit-media-controls-panel { background: var(--bg-3); }
+  
   .btn-ghost {
-    display: block; width: 100%; margin-top: 12px; padding: 13px; border: 1px solid var(--line-hi);
+    display: block; width: 100%; margin-top: 10px; padding: 12px; border: 1px solid var(--line-hi);
     border-radius: var(--radius-sm); background: transparent; color: var(--text-2);
-    font-family: var(--ui); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .14em;
+    font-family: var(--ui); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .14em;
     text-align: center; text-decoration: none; cursor: pointer; box-sizing: border-box;
     transition: background .2s var(--ease), border-color .2s var(--ease), color .2s var(--ease);
   }
   .btn-ghost:hover { background: rgba(193,166,115,.06); border-color: var(--gold-glow); color: var(--gold-text); }
-
-  .dials-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px 12px; margin: 22px 0 6px; }
+  
+  /* Archetypes & Vibe Matrix */
+  .archetype-shelf { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; margin-bottom: 16px; }
+  .archetype-btn {
+    background: var(--bg-3); border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 12px; font-size: 10.5px; letter-spacing: .04em; color: var(--text-2);
+    cursor: pointer; transition: all .2s var(--ease);
+  }
+  .archetype-btn:hover { border-color: var(--gold); color: var(--gold-text); background: var(--bg-4); transform: translateY(-1px); }
+  
+  .vibe-section { margin-top: 18px; }
+  .vibe-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .vibe-nav { display: flex; gap: 6px; }
+  .vibe-nav-btn {
+    background: transparent; border: none; font-size: 10px; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--text-3); cursor: pointer; padding: 3px 6px;
+    border-radius: 4px; transition: color .2s var(--ease);
+  }
+  .vibe-nav-btn.active, .vibe-nav-btn:hover { color: var(--gold-text); }
+  
+  .tag-tray { display: flex; gap: 6px; flex-wrap: wrap; max-height: 125px; overflow-y: auto; padding: 4px 2px; }
+  .tag-tray::-webkit-scrollbar { width: 4px; }
+  .tag-tray::-webkit-scrollbar-thumb { background: var(--line-hi); border-radius: 4px; }
+  .tag-chip {
+    display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px;
+    border-radius: 999px; font-size: 10.5px; background: var(--bg-3); border: 1px solid var(--line);
+    color: var(--text-2); cursor: pointer; user-select: none; transition: all .18s var(--ease);
+  }
+  .tag-chip:hover { border-color: var(--gold-glow); color: var(--text); }
+  .tag-chip.active { background: rgba(193,166,115,.15); border-color: var(--gold); color: var(--gold-text); box-shadow: 0 0 8px rgba(193,166,115,.15); }
+  
+  /* Title Drawer */
+  .title-shelf { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; margin-bottom: 6px; }
+  .title-pill {
+    background: var(--bg-3); border: 1px solid var(--line); border-radius: 999px;
+    padding: 5px 11px; font-size: 11px; color: var(--text-2); cursor: pointer;
+    transition: all .2s var(--ease); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  }
+  .title-pill:hover { border-color: var(--gold); color: var(--gold-text); background: var(--bg-4); }
+  
+  /* Dials & Star */
+  .dials-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px 10px; margin: 18px 0 6px; }
   .dial-wrap { text-align: center; user-select: none; }
   .knob {
-    width: 52px; height: 52px; border-radius: 50%; margin: 0 auto; position: relative; cursor: ns-resize;
+    width: 50px; height: 50px; border-radius: 50%; margin: 0 auto; position: relative; cursor: ns-resize;
     background: radial-gradient(circle at 35% 30%, var(--bg-3), var(--bg-2) 70%); border: 1px solid var(--line-hi);
     box-shadow: inset 0 1px 2px rgba(0,0,0,.5); touch-action: none;
   }
   .knob::before {
-    content: ""; position: absolute; top: 5px; left: 50%; width: 2px; height: 14px; background: var(--gold);
-    border-radius: 2px; transform-origin: 50% 21px; transform: translateX(-50%) rotate(var(--rot, -135deg));
+    content: ""; position: absolute; top: 5px; left: 50%; width: 2px; height: 13px; background: var(--gold);
+    border-radius: 2px; transform-origin: 50% 20px; transform: translateX(-50%) rotate(var(--rot, -135deg));
     transition: transform .05s linear;
   }
   .knob:hover { border-color: var(--gold-glow); }
   .knob:focus-visible { outline: none; border-color: var(--gold); box-shadow: inset 0 1px 2px rgba(0,0,0,.5), 0 0 0 3px var(--gold-glow); }
   .knob.dragging { border-color: var(--gold); }
-  .dial-label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--text-2); margin-top: 9px; }
+  .dial-label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--text-2); margin-top: 8px; }
   .dial-value { font-family: var(--display); font-style: italic; color: var(--gold-text); font-size: 13px; margin-top: 2px; }
-
-  .star-wrap { display: flex; justify-content: center; margin: 8px 0 20px; }
-  /* cursor is set from JS per-hover (grab only when actually over a handle) --
-     a blanket `cursor: grab` here would promise draggability across the whole chart */
+  
+  .star-wrap { display: flex; justify-content: center; margin: 6px 0 16px; }
   #starChart { touch-action: none; }
-  /* while a drag is in progress the cursor must not flicker as the pointer
-     passes over other elements, so the whole document takes the drag cursor */
   body.dragging-knob, body.dragging-knob * { cursor: ns-resize !important; }
   body.dragging-star, body.dragging-star * { cursor: grabbing !important; }
-
-  /* a vertical list: three checkboxes across wrapped 1-then-2 and looked broken */
-  .toggles { display: flex; flex-direction: column; gap: 11px; margin-top: 14px; }
+  
+  /* Toggles & Fields */
+  .toggles { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
   .toggle { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-2); cursor: pointer; }
   .toggle input { accent-color: var(--gold); width: 15px; height: 15px; cursor: pointer; flex: none; }
   .toggle:hover { color: var(--text); }
-
-  .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--text-2); margin: 24px 0 4px; border-top: 1px solid var(--line-soft); padding-top: 20px; }
+  
+  .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--text-2); margin: 22px 0 6px; border-top: 1px solid var(--line-soft); padding-top: 18px; }
   .section-label:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
-
-  .layout { display: grid; grid-template-columns: 1fr 1fr 1.05fr; gap: 24px; align-items: stretch; }
+  
+  .layout { display: grid; grid-template-columns: 1.05fr 1fr 1.15fr; gap: 24px; align-items: stretch; }
   .layout .card { display: flex; flex-direction: column; }
-  .layout .card-title { font-family: var(--display); font-style: italic; font-size: 20px; color: var(--text); margin: 0 0 4px; }
-  .layout .card-hint { font-size: 12px; color: var(--text-2); margin: 0 0 24px; }
-  @media (max-width: 1180px) {
+  .layout .card-title { font-family: var(--display); font-style: italic; font-size: 22px; color: var(--text); margin: 0 0 4px; }
+  .layout .card-hint { font-size: 12px; color: var(--text-2); margin: 0 0 20px; line-height: 1.4; }
+  
+  @media (max-width: 1280px) {
     .layout { grid-template-columns: 1fr 1fr; }
     .layout > .card:first-child { grid-column: 1 / -1; }
   }
-  @media (max-width: 720px) {
+  @media (max-width: 760px) {
     .layout { grid-template-columns: 1fr; }
     .layout > .card:first-child { grid-column: auto; }
   }
-
+  
   select, input[type=text] {
     width: 100%; background: var(--bg-3); color: var(--text); border: 1px solid var(--line);
-    border-radius: var(--radius-sm); padding: 11px 12px; font-family: var(--ui); font-size: 13px;
-    font-weight: 300; margin-top: 8px; transition: border-color .2s var(--ease);
+    border-radius: var(--radius-sm); padding: 10px 12px; font-family: var(--ui); font-size: 13px;
+    font-weight: 300; margin-top: 7px; transition: border-color .2s var(--ease);
   }
   select:focus, input[type=text]:focus { outline: none; border-color: var(--gold-glow); }
-  /* some browsers render the dropdown list with system colours unless told otherwise */
   option { background: var(--bg-3); color: var(--text); }
-  .field { margin-top: 22px; }
+  .field { margin-top: 18px; }
   .field:first-child { margin-top: 0; }
-  .hint { font-size: 11px; color: var(--text-3); margin-top: 6px; line-height: 1.5; }
+  .hint { font-size: 11px; color: var(--text-3); margin-top: 5px; line-height: 1.45; }
   .card.disabled { opacity: .4; pointer-events: none; }
+  
+  /* Canvas Studio */
   #exportCanvas {
-    display: block; margin: 14px auto 0; max-width: 100%; max-height: 300px; width: auto; height: auto;
-    border-radius: var(--radius-sm); border: 1px solid var(--line); background: #090807;
+    display: block; margin: 14px auto 0; max-width: 100%; max-height: 320px; width: auto; height: auto;
+    border-radius: var(--radius-sm); border: 1px solid var(--line); background: #090807; box-shadow: 0 4px 20px rgba(0,0,0,.6);
   }
-  .footer {
-    margin-top: 48px; text-align: center; font-size: 10px; letter-spacing: .12em;
-    text-transform: uppercase; color: var(--text-3);
-  }
-  .footer .sep { opacity: .5; margin: 0 6px; }
-
-  /* ---- Step rail: the three columns read as one numbered flow ---- */
-  .rail { display: flex; align-items: center; margin: 0 0 38px; }
+  
+  /* Rail Step Flow */
+  .rail { display: flex; align-items: center; margin: 0 0 34px; }
   .rail-node { display: flex; align-items: center; gap: 11px; flex: none; }
   .rail-dot {
     width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line-hi);
@@ -566,10 +641,7 @@ INDEX_HTML = """
     100% { box-shadow: 0 0 0 0 rgba(193,166,115,0); }
   }
   @media (max-width: 720px) { .rail-label { display: none; } .rail-line { margin: 0 8px; } }
-
-  /* ---- Card step states ---- */
-  /* position:relative anchors the unlock sweep overlay */
-  .card { position: relative; transition: opacity .6s var(--ease), border-color .6s var(--ease); }
+  
   .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
   .step-badge {
     width: 27px; height: 27px; border-radius: 50%; border: 1px solid var(--line-hi);
@@ -579,8 +651,6 @@ INDEX_HTML = """
   .card.is-active .step-badge { border-color: var(--gold); color: var(--gold-text); }
   .card.is-done .step-badge { background: linear-gradient(180deg, var(--gold), var(--gold-deep)); border-color: transparent; color: var(--on-gold); }
   .card.is-active { border-color: var(--gold-glow); }
-
-  /* the moment a step unlocks: rise into place with a single gold sweep */
   .card.unlocking { animation: unlockRise .75s var(--ease-out) both; overflow: hidden; }
   .card.unlocking::after {
     content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
@@ -589,21 +659,16 @@ INDEX_HTML = """
   }
   @keyframes unlockRise { from { opacity: .35; transform: translateY(12px); } to { opacity: 1; transform: none; } }
   @keyframes unlockSweep { to { transform: translateX(100%); } }
-
-  /* Each card's closing action group is pinned to the bottom, so all three
-     columns terminate on the same baseline instead of leaving ragged
-     whitespace of three different heights below their buttons. */
-  .card-actions { margin-top: auto; }
-
-  /* ---- Output bar: one continuous strip under the three columns, holding
-     every result (progress, player) and every download. ---- */
-  .outbar { margin-top: 24px; display: flex; align-items: center; gap: 30px; padding: 22px 26px; }
+  .card-actions { margin-top: auto; padding-top: 14px; }
+  
+  /* Output Bar */
+  .outbar { margin-top: 24px; display: flex; align-items: center; gap: 26px; padding: 20px 24px; }
   .outbar-main { flex: 1 1 auto; min-width: 0; }
   .outbar-line { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--text-2); letter-spacing: .02em; margin-bottom: 12px; }
   #statusLabel { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #statusPct { color: var(--gold-text); font-family: var(--display); font-style: italic; font-size: 15px; flex: none; }
-  @media (max-width: 900px) { .outbar { flex-direction: column; align-items: stretch; gap: 20px; } }
-
+  @media (max-width: 960px) { .outbar { flex-direction: column; align-items: stretch; gap: 18px; } }
+  
   .eq { display: flex; align-items: flex-end; gap: 3px; height: 18px; flex: none; }
   .eq i { width: 2px; height: 30%; border-radius: 2px; background: var(--text-3); animation: eqIdle 3.2s var(--ease) infinite; }
   .eq i:nth-child(2) { animation-delay: .35s; }
@@ -612,15 +677,22 @@ INDEX_HTML = """
   .eq i:nth-child(5) { animation-delay: 1.4s; }
   @keyframes eqIdle { 0%, 100% { height: 22%; } 50% { height: 72%; } }
   .outbar.busy .eq i { background: var(--gold); animation-duration: .95s; }
-
-  #playerWrap { opacity: 0; transition: opacity .55s var(--ease); }
+  
+  #playerWrap { opacity: 0; transition: opacity .55s var(--ease); margin-top: 10px; }
   #playerWrap.ready { opacity: 1; }
-  #playerWrap audio { margin-top: 14px; }
-
-  /* download chips: dim until their artefact actually exists */
+  
+  /* Player Utility Row */
+  .player-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+  .speed-group { display: flex; gap: 4px; align-items: center; }
+  .speed-btn {
+    background: var(--bg-3); border: 1px solid var(--line); border-radius: 4px;
+    padding: 3px 8px; font-size: 10px; color: var(--text-2); cursor: pointer;
+  }
+  .speed-btn.active { border-color: var(--gold); color: var(--gold-text); background: var(--bg-4); }
+  
   .chips { display: flex; gap: 10px; flex: none; flex-wrap: wrap; }
   .chip {
-    display: inline-flex; align-items: center; gap: 9px; padding: 11px 17px;
+    display: inline-flex; align-items: center; gap: 9px; padding: 11px 16px;
     border: 1px solid var(--line-hi); border-radius: 999px; background: transparent;
     color: var(--text-2); font-family: var(--ui); font-weight: 500; font-size: 11px;
     text-transform: uppercase; letter-spacing: .12em; text-decoration: none; cursor: pointer;
@@ -631,7 +703,19 @@ INDEX_HTML = """
   .chip .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); flex: none; transition: opacity .4s var(--ease); }
   .chip.empty { opacity: .26; pointer-events: none; }
   .chip.empty .dot { opacity: 0; }
-
+  
+  /* Artwork Drop Area */
+  .art-drop {
+    border: 1px dashed var(--line-hi); border-radius: var(--radius-sm); padding: 12px;
+    text-align: center; cursor: pointer; transition: all .2s var(--ease); margin-top: 8px;
+    background: var(--bg-3); display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .art-drop:hover { border-color: var(--gold); background: var(--bg-4); }
+  .art-preview { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; display: none; }
+  
+  .footer { margin-top: 48px; text-align: center; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); }
+  .footer .sep { opacity: .5; margin: 0 6px; }
+  
   @media (prefers-reduced-motion: reduce) {
     .card.unlocking, .card.unlocking::after, .rail-node.active .rail-dot, .eq i { animation: none; }
     .rail-line::after { transition: none; }
@@ -641,9 +725,15 @@ INDEX_HTML = """
 <body>
 <canvas id="featherCanvas"></canvas>
 <div class="wrap">
-  <div class="brand"><div class="ring"></div><span>Tranquil Soul Music</span></div>
+  <div class="brand">
+    <div class="ring"></div>
+    <div class="brand-title">
+      <span>Tranquil Soul Music</span>
+      <span>Tranquilicy Creative Studio</span>
+    </div>
+  </div>
   <h1>Create a track</h1>
-  <div class="sub">Generate, then master and export it — three steps, one flow.</div>
+  <div class="sub">Craft your sonic atmosphere, sculpt the tone, and render social-ready visualizer videos.</div>
 
   <div class="rail">
     <div class="rail-node" id="railStep1"><span class="rail-dot">01</span><span class="rail-label">Generate</span></div>
@@ -654,31 +744,61 @@ INDEX_HTML = """
   </div>
 
   <div class="layout">
+  <!-- STEP 1: GENERATE & PROMPTER -->
   <div class="card" id="generateCard">
     <div class="card-head">
       <span class="step-badge">01</span>
       <div class="card-title">Generate</div>
     </div>
-    <div class="card-hint">Describe the mood, tempo and instrumentation — Tranquilicy will render it.</div>
-    <div class="row">
-      <label style="margin:0">Prompt</label>
-      <button type="button" class="link-btn" id="randomiseBtn" onclick="randomisePrompt()">⟳ Randomise</button>
-    </div>
-    <textarea id="prompt" placeholder="e.g. vinyl crackle, rain on window, specific instrument... or hit Randomise"></textarea>
+    <div class="card-hint">Select an archetype or compose your vision using the prompter matrix.</div>
 
-    <div class="section-label">Six dials, shape the sound</div>
+    <label style="margin:0 0 6px">Vibe Archetypes</label>
+    <div class="archetype-shelf" id="promptArchetypes">
+      <button type="button" class="archetype-btn" onclick="applyArchetype('zen')">🧘 Deep Zen</button>
+      <button type="button" class="archetype-btn" onclick="applyArchetype('lofi')">☕ Midnight Lofi</button>
+      <button type="button" class="archetype-btn" onclick="applyArchetype('sunset')">🌅 Sunset Chill</button>
+      <button type="button" class="archetype-btn" onclick="applyArchetype('celestial')">✨ Celestial</button>
+      <button type="button" class="archetype-btn" onclick="applyArchetype('rain')">🌧 Coffee Rain</button>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <label style="margin:0">Prompt Composition</label>
+      <div class="action-row-mini">
+        <button type="button" class="link-btn" id="alchemistBtn" onclick="alchemistPrompt()">✧ Alchemist</button>
+        <button type="button" class="link-btn" id="randomiseBtn" onclick="randomisePrompt()">⟳ Roll</button>
+        <button type="button" class="link-btn" id="copyPromptBtn" onclick="copyPrompt()">📋</button>
+        <button type="button" class="link-btn" id="clearPromptBtn" onclick="clearPrompt()">✕</button>
+      </div>
+    </div>
+    <textarea id="prompt" placeholder="Describe the atmosphere, textures, instruments... or click any tag below"></textarea>
+
+    <div class="vibe-section">
+      <div class="vibe-header">
+        <label style="margin:0">Vibe Matrix</label>
+        <div class="vibe-nav">
+          <button type="button" class="vibe-nav-btn active" id="tabGenre" onclick="switchVibeTab('genre')">Genre</button>
+          <button type="button" class="vibe-nav-btn" id="tabTexture" onclick="switchVibeTab('texture')">Texture</button>
+          <button type="button" class="vibe-nav-btn" id="tabMood" onclick="switchVibeTab('mood')">Mood</button>
+          <button type="button" class="vibe-nav-btn" id="tabMusical" onclick="switchVibeTab('musical')">Tempo & Key</button>
+        </div>
+      </div>
+      <div class="tag-tray" id="vibeTagTray"></div>
+    </div>
+
+    <div class="section-label">Sound Dimensions</div>
     <div class="dials-grid" id="dialsGrid"></div>
     <div class="star-wrap">
       <svg id="starChart" width="180" height="180" viewBox="0 0 180 180"></svg>
     </div>
 
-    <div class="section-label">Exclude</div>
+    <div class="section-label">Negative Guidance</div>
     <div class="toggles">
       <label class="toggle"><input type="checkbox" id="noDrums"> No drums / percussion</label>
       <label class="toggle"><input type="checkbox" id="noVocals"> No vocals</label>
       <label class="toggle"><input type="checkbox" id="noBass"> No bass</label>
+      <label class="toggle"><input type="checkbox" id="noHarshHighs"> No harsh highs / bright synths</label>
     </div>
-    <div class="hint">Steered away via the guidance model's negative branch — strong, but not absolute.</div>
+    <div class="hint">Guided away via unconditional branch steering.</div>
 
     <div class="row">
       <label style="margin:0">Duration</label>
@@ -687,27 +807,57 @@ INDEX_HTML = """
     <input type="range" id="duration" min="5" max="180" value="20">
 
     <div class="card-actions">
-      <button id="genBtn" class="btn-primary" onclick="generate()">Generate</button>
+      <button id="genBtn" class="btn-primary" onclick="generate()">Generate Track</button>
     </div>
   </div>
 
+  <!-- STEP 2: MASTER & AUDIO STUDIO -->
   <div class="card disabled" id="audioCard" inert aria-hidden="true">
     <div class="card-head">
       <span class="step-badge">02</span>
-      <div class="card-title">Master</div>
+      <div class="card-title">Master & Audio</div>
     </div>
-    <div class="card-hint">Name it, shape it, and export a finished mix.</div>
+    <div class="card-hint">Curate title, sculpt tone, inject ambient texture, and export mix.</div>
 
     <div class="field">
       <div class="row" style="margin-top:0">
-        <label style="margin:0">Track title</label>
-        <button type="button" class="link-btn" onclick="rerollTitle()">🎲 Re-roll</button>
+        <label style="margin:0">Track Title</label>
+        <div class="action-row-mini">
+          <button type="button" class="link-btn" id="roll5Btn" onclick="generateBatchTitles()">✨ Roll 5</button>
+          <button type="button" class="link-btn" onclick="rerollTitle()">🎲 Re-roll</button>
+        </div>
       </div>
       <input type="text" id="trackTitle" placeholder="Untitled Chillout Track">
+      <div class="title-shelf" id="titlePillTray"></div>
     </div>
 
     <div class="field">
-      <label>Filename style</label>
+      <div class="row" style="margin-top:0">
+        <label style="margin:0">Theme Universe</label>
+        <label style="margin:0">Formula Style</label>
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+        <select id="titleUniverse" onchange="rerollTitle()">
+          <option value="all">All Universes</option>
+          <option value="celestial">Celestial & Cosmic</option>
+          <option value="tideline">Tideline & Ocean</option>
+          <option value="obsidian">Obsidian & Midnight</option>
+          <option value="zen">Zen & Sanctuary</option>
+          <option value="organic">Warm & Organic</option>
+        </select>
+        <select id="titleFormula" onchange="rerollTitle()">
+          <option value="random">Auto Formula</option>
+          <option value="adj_noun">Adj + Noun</option>
+          <option value="noun_of_noun">The Noun of Noun</option>
+          <option value="verbing">Verb-ing Through</option>
+          <option value="japanese">Japanese Aesthetic</option>
+          <option value="opus">Opus & Catalog</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Filename Style</label>
       <select id="namePattern">
         <option value="plain">Title only</option>
         <option value="numbered-dash">01 - Title</option>
@@ -718,32 +868,84 @@ INDEX_HTML = """
       </select>
     </div>
 
-    <div class="section-label">Master</div>
+    <div class="section-label">Live Tone & Atmosphere</div>
     <div class="field">
-      <label>Loudness</label>
-      <select id="masterPreset">
-        <option value="off">Off — raw generation</option>
-        <option value="gentle">Gentle</option>
-        <option value="streaming" selected>Streaming-ready</option>
-        <option value="loud">Loud</option>
-      </select>
-      <div class="hint">Level-matches and limits peaks. Not studio-grade LUFS mastering.</div>
+      <div class="row" style="margin-top:0">
+        <label style="margin:0">Ambient Texture Layer</label>
+        <span class="val"><span id="ambientVolVal">30</span>%</span>
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+        <select id="ambientSelect" onchange="updateAmbientLayer()">
+          <option value="off">Off — Pure Music</option>
+          <option value="vinyl">Vintage Vinyl Crackle</option>
+          <option value="rain">Gentle Window Rain</option>
+        </select>
+        <input type="range" id="ambientVol" min="0" max="100" value="30" oninput="updateAmbientVol()">
+      </div>
     </div>
 
     <div class="field">
       <div class="row" style="margin-top:0">
-        <label style="margin:0">Stereo width</label>
+        <label style="margin:0">Analog Warmth (Bass)</label>
+        <span class="val"><span id="warmthVal">0</span> dB</span>
+      </div>
+      <input type="range" id="toneWarmth" min="-6" max="8" step="0.5" value="0" oninput="updateToneEq()">
+    </div>
+
+    <div class="field">
+      <div class="row" style="margin-top:0">
+        <label style="margin:0">Air & Sheen (Highs)</label>
+        <span class="val"><span id="airVal">0</span> dB</span>
+      </div>
+      <input type="range" id="toneAir" min="-6" max="8" step="0.5" value="0" oninput="updateToneEq()">
+    </div>
+
+    <div class="field">
+      <label class="toggle">
+        <input type="checkbox" id="lofiFilter" onchange="updateToneEq()"> Vintage Tape / Lo-Fi Cassette Filter
+      </label>
+    </div>
+
+    <div class="section-label">Mastering & Spatialization</div>
+    <div class="field">
+      <label>Loudness Target</label>
+      <select id="masterPreset">
+        <option value="off">Off — raw generation</option>
+        <option value="gentle">Gentle (-16 dBFS)</option>
+        <option value="streaming" selected>Streaming-ready (-14 dBFS)</option>
+        <option value="loud">Punchy / Loud (-9 dBFS)</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <div class="row" style="margin-top:0">
+        <label style="margin:0">Stereo Width</label>
         <span class="val"><span id="widthVal">0</span></span>
       </div>
       <input type="range" id="stereoWidth" min="0" max="100" value="0">
-      <div class="hint">Mono source, widened mono-safely.</div>
+      <div class="hint">Mono source, widened mono-safely without phase cancel.</div>
     </div>
 
-    <div class="section-label">Shape</div>
-    <label class="toggle" style="margin-top:14px">
-      <input type="checkbox" id="seamlessLoop"> Seamless loop
+    <div class="field">
+      <div class="row" style="margin-top:0">
+        <label style="margin:0">Master Tape Saturation</label>
+        <span class="val"><span id="masterWarmthVal">0</span>%</span>
+      </div>
+      <input type="range" id="masterWarmth" min="0" max="100" value="0">
+    </div>
+
+    <div class="field">
+      <div class="row" style="margin-top:0">
+        <label style="margin:0">Master High Air Lift</label>
+        <span class="val"><span id="masterAirVal">0</span>%</span>
+      </div>
+      <input type="range" id="masterAir" min="0" max="100" value="0">
+    </div>
+
+    <div class="section-label">Loop & Envelope</div>
+    <label class="toggle" style="margin-top:10px">
+      <input type="checkbox" id="seamlessLoop"> Seamless loop (replaces fades)
     </label>
-    <div class="hint">Repeats with no audible join. Trims 2s and replaces fades.</div>
 
     <div id="fadeFields">
       <div class="row">
@@ -759,82 +961,191 @@ INDEX_HTML = """
     </div>
 
     <div class="card-actions">
-      <div class="section-label">Export</div>
+      <div class="section-label">Export Audio</div>
       <div class="field">
         <label>Format</label>
-        <select id="exportFormat">__FORMAT_OPTIONS__</select>
+        <select id="exportFormat">
+          __FORMAT_OPTIONS__
+        </select>
       </div>
-      <button class="btn-primary" id="masterBtn" onclick="downloadMastered()">Master audio</button>
+      <button class="btn-primary" id="masterBtn" onclick="downloadMastered()">Master & Export Audio</button>
       <div id="masterStatus" class="hint" style="display:none; text-align:center;"></div>
     </div>
   </div>
 
+  <!-- STEP 3: VIDEO & VISUALIZER STUDIO -->
   <div class="card disabled" id="videoCard" inert aria-hidden="true">
     <div class="card-head">
       <span class="step-badge">03</span>
-      <div class="card-title">Video</div>
+      <div class="card-title">Video Studio</div>
     </div>
-    <div class="card-hint">Render a waveform video sized for wherever you're posting it.</div>
+    <div class="card-hint">Render luxury audio-reactive videos with custom artwork & typography.</div>
 
     <div class="field">
-      <label>Waveform style</label>
-      <select id="vidStyle">
-        <option value="bars">Bars</option>
-        <option value="wave" selected>Wave</option>
-        <option value="pulse">Pulse</option>
-        <option value="off">Off</option>
+      <div class="row" style="margin-top:0">
+        <label style="margin:0">Cover Artwork</label>
+        <button type="button" class="link-btn" id="removeArtBtn" style="display:none" onclick="removeCoverArt()">Remove Art</button>
+      </div>
+      <div class="art-drop" onclick="document.getElementById('artUpload').click()">
+        <img id="artThumb" class="art-preview" alt="Cover preview">
+        <span id="artStatus">Click or drop custom album art (JPG/PNG)</span>
+      </div>
+      <input type="file" id="artUpload" accept="image/*" style="display:none" onchange="handleCoverUpload(event)">
+    </div>
+
+    <div class="field">
+      <div class="row" style="margin-top:0">
+        <label style="margin:0">Waveform Engine</label>
+        <label style="margin:0">Color Palette</label>
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+        <select id="vidStyle">
+          <option value="bars">Mirrored Bars</option>
+          <option value="wave" selected>Wave Ribbon</option>
+          <option value="radial">Radial 360° Halo</option>
+          <option value="pulse">Sacred Lotus Pulse</option>
+          <option value="stardust">Cosmic Stardust</option>
+          <option value="lissajous">Stereo Lissajous</option>
+          <option value="off">Off (Artwork Only)</option>
+        </select>
+        <select id="vidPalette">
+          <option value="gold">Gold & Champagne</option>
+          <option value="ember">Warm Ember</option>
+          <option value="moonlit">Moonlit Ethereal</option>
+          <option value="amethyst">Royal Obsidian</option>
+          <option value="emerald">Zen Jade</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="row" style="margin-top:0">
+        <label style="margin:0">Backdrop</label>
+        <label style="margin:0">Aspect Ratio</label>
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+        <select id="vidBackdrop">
+          <option value="feathers">Feather Drift</option>
+          <option value="bloom">Gold Bloom</option>
+          <option value="nebula">Cosmic Starfield</option>
+          <option value="custom">Custom Cover Art</option>
+          <option value="minimal">Minimal Dark</option>
+        </select>
+        <select id="vidAspect">
+          <option value="16:9">16:9 — YouTube Landscape</option>
+          <option value="9:16">9:16 — TikTok / Reels / Shorts</option>
+          <option value="1:1">1:1 — Square Post / Canvas</option>
+          <option value="4:5">4:5 — Instagram Feed Portrait</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="row" style="margin-top:0">
+        <label style="margin:0">Backdrop Blur</label>
+        <span class="val"><span id="artBlurVal">12</span>px</span>
+      </div>
+      <input type="range" id="artBlur" min="0" max="30" value="12" oninput="document.getElementById('artBlurVal').textContent = this.value; refreshPreview();">
+    </div>
+
+    <div class="field">
+      <div class="row" style="margin-top:0">
+        <label style="margin:0">Backdrop Dimming</label>
+        <span class="val"><span id="artDimVal">50</span>%</span>
+      </div>
+      <input type="range" id="artDim" min="0" max="90" value="50" oninput="document.getElementById('artDimVal').textContent = this.value; refreshPreview();">
+    </div>
+
+    <div class="field">
+      <div class="row" style="margin-top:0">
+        <label style="margin:0">Bass Camera Breathe</label>
+        <span class="val"><span id="beatPulseVal">40</span>%</span>
+      </div>
+      <input type="range" id="beatPulse" min="0" max="100" value="40" oninput="document.getElementById('beatPulseVal').textContent = this.value; refreshPreview();">
+      <div class="hint">Subtle zoom pulse reactive to low-end transients.</div>
+    </div>
+
+    <div class="section-label">Typography & Overlays</div>
+    <div class="field">
+      <label>Artist / Subtitle</label>
+      <input type="text" id="trackArtist" value="Tranquil Soul Music" placeholder="Artist Name or Catalog ID">
+    </div>
+
+    <div class="field">
+      <div class="row" style="margin-top:0">
+        <label style="margin:0">Display Font</label>
+        <label style="margin:0">Watermark</label>
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+        <select id="vidFont">
+          <option value="Cormorant Garamond">Cormorant Garamond (Serif)</option>
+          <option value="Cinzel">Cinzel (Cinematic)</option>
+          <option value="Montserrat">Montserrat (Modern Clean)</option>
+          <option value="Space Grotesk">Space Grotesk (Neo-Minimal)</option>
+        </select>
+        <select id="vidWatermark">
+          <option value="wordmark">Tranquilicy Wordmark</option>
+          <option value="ring">Ring Emblem Only</option>
+          <option value="custom">Custom Text</option>
+          <option value="none">None</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field" id="customWatermarkField" style="display:none">
+      <label>Custom Watermark Text</label>
+      <input type="text" id="customWatermarkText" value="TRANQUILICY">
+    </div>
+
+    <div class="field">
+      <label>Watermark Position</label>
+      <select id="watermarkPos">
+        <option value="br">Bottom Right</option>
+        <option value="tr">Top Right</option>
+        <option value="bl">Bottom Left</option>
+        <option value="tl">Top Left</option>
+        <option value="bc">Bottom Center</option>
       </select>
     </div>
-    <div class="field">
-      <label>Palette</label>
-      <select id="vidPalette">
-        <option value="gold">Gold</option>
-        <option value="ember">Ember</option>
-        <option value="moonlit">Moonlit</option>
-      </select>
+
+    <div class="toggles" style="margin-top:14px">
+      <label class="toggle"><input type="checkbox" id="showTitleCheck" checked> Display Track Title</label>
+      <label class="toggle"><input type="checkbox" id="showArtistCheck" checked> Display Artist / Subtitle</label>
+      <label class="toggle"><input type="checkbox" id="showTimecodeCheck" checked> Display Timecode & Duration</label>
+      <label class="toggle"><input type="checkbox" id="showProgressCheck" checked> Bottom Progress Scrubber Bar</label>
+      <label class="toggle"><input type="checkbox" id="showVinylCheck" checked> Center Vinyl Artwork Disc</label>
     </div>
+
     <div class="field">
-      <label>Backdrop</label>
-      <select id="vidBackdrop">
-        <option value="feathers">Feather drift</option>
-        <option value="bloom">Gold bloom</option>
-        <option value="minimal">Minimal dark</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Aspect ratio</label>
-      <select id="vidAspect">
-        <option value="9:16">9:16 — Reels / TikTok / Shorts</option>
-        <option value="1:1">1:1 — Square</option>
-        <option value="16:9">16:9 — YouTube / desktop</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Watermark</label>
-      <select id="vidWatermark">
-        <option value="wordmark">Tranquilicy wordmark</option>
-        <option value="ring">Ring icon only</option>
-        <option value="none">None</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Length</label>
-      <select id="vidLength">
-        <option value="full">Full track</option>
-        <option value="loop15">15s social loop</option>
-      </select>
+      <div class="row" style="margin-top:0">
+        <label style="margin:0">Render Length</label>
+        <label style="margin:0">Video Quality</label>
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+        <select id="vidLength">
+          <option value="full">Full Track</option>
+          <option value="loop15">15s Social Loop</option>
+          <option value="loop30">30s Social Loop</option>
+        </select>
+        <select id="vidQuality">
+          <option value="ultra">Ultra (8 Mbps, 60 FPS)</option>
+          <option value="high" selected>High (5 Mbps, 30 FPS)</option>
+          <option value="fast">Compact (2.5 Mbps, 30 FPS)</option>
+        </select>
+      </div>
     </div>
 
     <canvas id="exportCanvas"></canvas>
 
     <div class="card-actions">
-      <button class="btn-primary" id="renderVidBtn" onclick="renderVideo()">Render video</button>
+      <button class="btn-primary" id="renderVidBtn" onclick="renderVideo()">Render High-Res Video</button>
       <div id="vidStatus" class="hint" style="display:none; text-align:center; margin-top:10px;"></div>
-      <button class="btn-ghost" id="stillBtn" onclick="saveStillFrame()">Capture still frame</button>
+      <button class="btn-ghost" id="stillBtn" onclick="saveStillFrame()">Capture Still Frame</button>
     </div>
   </div>
   </div>
 
+  <!-- OUTPUT CONTROL & ARTIFACT BAR -->
   <div class="card outbar" id="outbar">
     <div class="outbar-main">
       <div class="outbar-line">
@@ -844,7 +1155,18 @@ INDEX_HTML = """
         <span id="statusPct"></span>
       </div>
       <div id="barOuter"><div id="barInner"></div></div>
-      <div id="playerWrap" hidden><audio id="player" controls></audio></div>
+      <div id="playerWrap" hidden>
+        <audio id="player" controls></audio>
+        <div class="player-tools">
+          <div class="speed-group">
+            <span style="font-size:10px; text-transform:uppercase; color:var(--text-3); margin-right:4px;">Speed:</span>
+            <button type="button" class="speed-btn" id="speed075Btn" onclick="setSpeed(0.75)">0.75x</button>
+            <button type="button" class="speed-btn active" id="speed100Btn" onclick="setSpeed(1.0)">1.0x</button>
+            <button type="button" class="speed-btn" id="speed125Btn" onclick="setSpeed(1.25)">1.25x</button>
+          </div>
+          <button type="button" class="speed-btn" id="playerLoopBtn" onclick="togglePlayerLoop()">🔁 Loop: Off</button>
+        </div>
+      </div>
       <div id="errorText"></div>
     </div>
     <div class="chips">
@@ -863,15 +1185,12 @@ INDEX_HTML = """
 <script>
 document.getElementById('duration').oninput = e => document.getElementById('durVal').textContent = e.target.value;
 
-let lastAudioUrl = null;  // each generate() call creates a new blob URL; without revoking the
-                           // previous one, every generation leaks the last audio buffer from memory
+let lastAudioUrl = null;
 let lastVideoUrl = null;
 let lastMasterUrl = null;
 let lastStillUrl = null;
 let currentJobId = null;
 
-// Every download lives as a chip in the output bar; a chip stays dimmed and
-// unclickable until the thing it points at actually exists.
 function setChip(id, url, filename, label) {
   const chip = document.getElementById(id);
   if (!url) {
@@ -888,8 +1207,7 @@ function setChip(id, url, filename, label) {
   }
 }
 
-// ---- Shared feather-shape drawing (used by the page background AND the
-// export video's "Feather drift" backdrop, so both stay visually identical) ----
+// ---- Falling Feathers Background ----
 function drawFeatherShape(ctx, size, colorTop, colorBottom, strokeStyle) {
   const hgt = size * 2.6, wid = size;
   const grad = ctx.createLinearGradient(0, -hgt / 2, 0, hgt / 2);
@@ -910,17 +1228,13 @@ function drawFeatherShape(ctx, size, colorTop, colorBottom, strokeStyle) {
   ctx.stroke();
 }
 
-// ---- Falling gold feathers background ----
 (function () {
   const canvas = document.getElementById('featherCanvas');
   const ctx = canvas.getContext('2d');
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const GOLD = '#C1A673', GOLD_LIGHT = '#D4B97A';
   let dpr = Math.min(window.devicePixelRatio || 1, 2);
   let w = 0, h = 0, particles = [];
 
   function featherCount() {
-    // fewer particles on small/mobile viewports to keep this cheap
     return Math.round(Math.max(14, Math.min(34, (window.innerWidth * window.innerHeight) / 45000)));
   }
 
@@ -930,13 +1244,13 @@ function drawFeatherShape(ctx, size, colorTop, colorBottom, strokeStyle) {
       x: Math.random() * w,
       y: spawnAbove ? -20 - Math.random() * h : Math.random() * h,
       size,
-      speedY: 10 + Math.random() * 14,          // px/sec
+      speedY: 10 + Math.random() * 14,
       swayAmp: 18 + Math.random() * 26,
-      swayFreq: 0.15 + Math.random() * 0.25,     // Hz
+      swayFreq: 0.15 + Math.random() * 0.25,
       phase: Math.random() * Math.PI * 2,
       baseX: 0,
       rot: Math.random() * Math.PI * 2,
-      rotSpeed: (Math.random() - 0.5) * 0.8,     // rad/sec
+      rotSpeed: (Math.random() - 0.5) * 0.8,
       opacity: 0.10 + Math.random() * 0.22,
     };
   }
@@ -950,147 +1264,103 @@ function drawFeatherShape(ctx, size, colorTop, colorBottom, strokeStyle) {
     canvas.style.width = w + 'px';
     canvas.style.height = h + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const count = featherCount();
-    if (particles.length === 0) {
-      particles = Array.from({ length: count }, () => makeParticle(false));
-      particles.forEach(p => { p.baseX = p.x; });
-    } else if (particles.length < count) {
-      const extra = Array.from({ length: count - particles.length }, () => makeParticle(true));
-      extra.forEach(p => { p.baseX = p.x; });
-      particles = particles.concat(extra);
-    } else {
-      particles = particles.slice(0, count);
-    }
+    particles = Array.from({ length: featherCount() }, () => {
+      const p = makeParticle(false);
+      p.baseX = p.x;
+      return p;
+    });
   }
+  window.addEventListener('resize', resize);
+  resize();
 
-  function drawFeather(p) {
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.rotate(p.rot);
-    ctx.globalAlpha = p.opacity;
-    drawFeatherShape(ctx, p.size, GOLD_LIGHT, GOLD, 'rgba(9,8,7,.25)');
-    ctx.restore();
-  }
-
-  let lastT = null;
-  function frame(t) {
-    if (lastT === null) lastT = t;
-    const dt = Math.min((t - lastT) / 1000, 0.05);
-    lastT = t;
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min((now - last) / 1000, 0.1);
+    last = now;
     ctx.clearRect(0, 0, w, h);
+    const t = now / 1000;
     for (const p of particles) {
       p.y += p.speedY * dt;
       p.rot += p.rotSpeed * dt;
-      if (p.y - p.size * 1.3 > h) {
-        p.y = -p.size * 1.3;
+      if (p.y - p.size * 1.5 > h) {
+        p.y = -p.size * 1.5;
         p.baseX = Math.random() * w;
         p.phase = Math.random() * Math.PI * 2;
       }
-      p.x = p.baseX + Math.sin(t / 1000 * p.swayFreq * Math.PI * 2 + p.phase) * p.swayAmp;
-      drawFeather(p);
+      p.x = p.baseX + Math.sin(t * p.swayFreq * Math.PI * 2 + p.phase) * p.swayAmp;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.globalAlpha = p.opacity;
+      drawFeatherShape(ctx, p.size, '#D4B97A', '#C1A673', 'rgba(9,8,7,.3)');
+      ctx.restore();
     }
-    requestAnimationFrame(frame);
+    requestAnimationFrame(loop);
   }
-
-  window.addEventListener('resize', resize);
-  resize();
-  if (!reduceMotion) {
-    requestAnimationFrame(frame);
-  } else {
-    // static single frame respecting the user's reduced-motion preference
-    ctx.clearRect(0, 0, w, h);
-    particles.forEach(p => { p.x = p.baseX; drawFeather(p); });
-  }
+  requestAnimationFrame(loop);
 })();
 
-// ---- Six dials + star chart ----
+// ---- Sonic Dials & Star Chart ----
 const DIALS = [
-  { key: 'atmosphere', label: 'Atmosphere', default: 60, describe: v => v < 33 ? 'minimal ambience' : v < 66 ? 'gentle atmosphere' : 'deeply atmospheric, immersive' },
-  { key: 'tempo',      label: 'Tempo',      default: 40, describe: v => Math.round(60 + v / 100 * 80) + ' bpm' },
-  { key: 'warmth',     label: 'Warmth',     default: 65, describe: v => v < 33 ? 'cool, clean tone' : v < 66 ? 'warm tone' : 'deeply warm, analog tone' },
-  { key: 'bass',       label: 'Bass',       default: 40, describe: v => v < 33 ? 'light bass' : v < 66 ? 'moderate bass' : 'deep sub bass' },
-  { key: 'melody',     label: 'Melody',     default: 55, describe: v => v < 33 ? 'drone-like, minimal melody' : v < 66 ? 'gentle melodic lead' : 'strong melodic lead' },
-  { key: 'rhythm',     label: 'Rhythm',     default: 30, describe: v => v < 33 ? 'free-form, no strong rhythm' : v < 66 ? 'soft rhythmic pulse' : 'steady rhythmic groove' },
+  { key: 'warmth',  label: 'Warmth',  default: 72, describe: v => v > 65 ? 'warm, rich low-end' : (v < 35 ? 'airy, lean' : 'balanced tone') },
+  { key: 'reverb',  label: 'Reverb',  default: 60, describe: v => v > 65 ? 'cavernous, deep reverb space' : (v < 35 ? 'dry, intimate' : 'moderate hall reverb') },
+  { key: 'tempo',   label: 'Tempo',   default: 45, describe: v => v > 65 ? 'gentle pulse, downtempo' : (v < 35 ? 'slow, floating tempo' : 'unhurried pace') },
+  { key: 'lofi',    label: 'Lo-fi',   default: 40, describe: v => v > 65 ? 'dusty tape flutter, vinyl warmth' : (v < 35 ? 'clean, modern fidelity' : 'subtle analog patina') },
+  { key: 'melodic', label: 'Melodic', default: 68, describe: v => v > 65 ? 'lyrical, expressive melody' : (v < 35 ? 'drone, minimal progression' : 'gentle motif') },
+  { key: 'density', label: 'Density', default: 50, describe: v => v > 65 ? 'lush, layered instrumentation' : (v < 35 ? 'sparse, breathing room' : 'balanced arrangement') },
 ];
+
 const knobs = {};
-
-function setupKnob(el, valueEl, initial, onChange) {
-  // NOTE: render() only touches this knob's own display -- it must NOT call
-  // onChange() during initial setup. onChange triggers drawStarChart(), which
-  // reads every dial's value; during buildDials()'s first iteration the other
-  // five knobs don't exist in `knobs` yet, so calling onChange here throws and
-  // silently aborts the rest of the dial-building loop (this was the actual
-  // bug behind "only one dial rendered, rest of the card is blank").
-  let value = initial;
-  const render = () => {
-    el.style.setProperty('--rot', (-135 + (value / 100) * 270) + 'deg');
-    valueEl.textContent = Math.round(value);
-    el.setAttribute('aria-valuenow', Math.round(value));
-  };
-  render();
-
-  let dragging = false, startY = 0, startVal = value;
-  const endDrag = () => {
-    if (!dragging) return;
-    dragging = false;
-    el.classList.remove('dragging');
-    document.body.classList.remove('dragging-knob');
-  };
-  el.addEventListener('pointerdown', e => {
-    dragging = true;
-    startY = e.clientY;
-    startVal = value;
-    el.setPointerCapture(e.pointerId);
-    el.classList.add('dragging');
-    document.body.classList.add('dragging-knob');
-    el.focus();
-  });
-  el.addEventListener('pointermove', e => {
-    if (!dragging) return;
-    value = Math.max(0, Math.min(100, startVal + (startY - e.clientY) * 0.6));
-    render();
-    onChange(value);
-  });
-  el.addEventListener('pointerup', endDrag);
-  el.addEventListener('pointercancel', endDrag);
-  el.addEventListener('lostpointercapture', endDrag);
-
-  // keyboard control: arrows nudge, shift+arrows jump, home/end snap to the ends
-  el.addEventListener('keydown', e => {
-    const step = e.shiftKey ? 10 : 2;
-    let next = value;
-    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') next = value + step;
-    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') next = value - step;
-    else if (e.key === 'Home') next = 0;
-    else if (e.key === 'End') next = 100;
-    else return;
-    e.preventDefault();
-    value = Math.max(0, Math.min(100, next));
-    render();
-    onChange(value);
-  });
-
-  return {
-    get value() { return value; },
-    // lets the star chart drive a dial directly (dragging its vertex) without
-    // duplicating the knob's rotation/label rendering logic
-    set value(v) { value = Math.max(0, Math.min(100, v)); render(); },
-  };
-}
-
 function buildDials() {
   const grid = document.getElementById('dialsGrid');
+  grid.innerHTML = '';
   DIALS.forEach(d => {
     const wrap = document.createElement('div');
     wrap.className = 'dial-wrap';
-    wrap.innerHTML = `<div class="knob" id="knob-${d.key}" tabindex="0" role="slider"
-        aria-label="${d.label}" aria-valuemin="0" aria-valuemax="100"></div>
+    wrap.innerHTML = `
+      <div class="knob" id="knob_${d.key}" tabindex="0" role="slider" aria-label="${d.label}" aria-valuenow="${d.default}" aria-valuemin="0" aria-valuemax="100"></div>
       <div class="dial-label">${d.label}</div>
-      <div class="dial-value" id="val-${d.key}"></div>`;
+      <div class="dial-value" id="val_${d.key}">${d.default}</div>
+    `;
     grid.appendChild(wrap);
-    const knobEl = wrap.querySelector('#knob-' + d.key);
-    const valEl = wrap.querySelector('#val-' + d.key);
-    knobs[d.key] = setupKnob(knobEl, valEl, d.default, () => drawStarChart());
+    const knobEl = wrap.querySelector('.knob');
+    const valEl = wrap.querySelector('.dial-value');
+    const state = {
+      value: d.default,
+      el: knobEl,
+      valEl,
+      set(v) {
+        state.value = Math.max(0, Math.min(100, Math.round(v)));
+        knobEl.style.setProperty('--rot', (-135 + (state.value / 100) * 270) + 'deg');
+        knobEl.setAttribute('aria-valuenow', state.value);
+        valEl.textContent = state.value;
+      }
+    };
+    knobs[d.key] = state;
+    state.set(d.default);
+
+    let startY = 0, startVal = 0;
+    knobEl.addEventListener('pointerdown', e => {
+      startY = e.clientY;
+      startVal = state.value;
+      knobEl.classList.add('dragging');
+      document.body.classList.add('dragging-knob');
+      knobEl.setPointerCapture(e.pointerId);
+    });
+    knobEl.addEventListener('pointermove', e => {
+      if (!knobEl.classList.contains('dragging')) return;
+      const dy = startY - e.clientY;
+      state.set(startVal + dy * 0.75);
+      drawStarChart();
+    });
+    const stop = () => {
+      if (knobEl.classList.contains('dragging')) {
+        knobEl.classList.remove('dragging');
+        document.body.classList.remove('dragging-knob');
+      }
+    };
+    knobEl.addEventListener('pointerup', stop);
+    knobEl.addEventListener('pointercancel', stop);
   });
 }
 
@@ -1104,156 +1374,267 @@ function drawStarChart() {
     return [cx + Math.cos(a) * maxR * frac, cy + Math.sin(a) * maxR * frac];
   };
   let svgHtml = '';
-  // background rings
   [0.33, 0.66, 1].forEach(frac => {
     const ring = DIALS.map((_, i) => pt(i, frac).join(',')).join(' ');
     svgHtml += `<polygon points="${ring}" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="1"/>`;
   });
-  // axis lines
   DIALS.forEach((_, i) => {
     const [x, y] = pt(i, 1);
     svgHtml += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="rgba(255,255,255,.07)" stroke-width="1"/>`;
   });
-  // value polygon (the "star")
   const valuePts = DIALS.map((d, i) => pt(i, knobs[d.key].value / 100).join(',')).join(' ');
   svgHtml += `<polygon points="${valuePts}" fill="rgba(193,166,115,.16)" stroke="#C1A673" stroke-width="1.5"/>`;
   DIALS.forEach((d, i) => {
     const [x, y] = pt(i, knobs[d.key].value / 100);
-    const active = draggingDialKey === d.key || hoverDialKey === d.key;
-    if (active) {
-      svgHtml += `<circle cx="${x}" cy="${y}" r="10" fill="rgba(193,166,115,.18)"/>`;
-    }
-    svgHtml += `<circle cx="${x}" cy="${y}" r="${active ? 5.5 : 4}" fill="#D4B97A" stroke="#090807" stroke-width="1"/>`;
-  });
-  // axis labels
-  DIALS.forEach((d, i) => {
-    const [x, y] = pt(i, 1.22);
-    svgHtml += `<text x="${x}" y="${y}" fill="#9A9188" font-size="8" font-family="Montserrat, sans-serif" text-anchor="middle" dominant-baseline="middle">${d.label}</text>`;
+    svgHtml += `<circle cx="${x}" cy="${y}" r="4" fill="#D4B97A" stroke="#090807" stroke-width="1"/>`;
+    const [lx, ly] = pt(i, 1.24);
+    svgHtml += `<text x="${lx}" y="${ly}" fill="#9A9188" font-size="8" font-family="Montserrat, sans-serif" text-anchor="middle" dominant-baseline="middle">${d.label}</text>`;
   });
   svg.innerHTML = svgHtml;
 }
 
-// ---- Star chart drag: grab a vertex directly instead of only the round knobs ----
-let draggingDialKey = null, hoverDialKey = null;
-function setupStarChartDrag() {
-  const svg = document.getElementById('starChart');
-  const cx = 90, cy = 90, maxR = 68;
-  const n = DIALS.length;
-  const angleFor = i => -Math.PI / 2 + i * (2 * Math.PI / n);
-
-  function svgPoint(e) {
-    const rect = svg.getBoundingClientRect();
-    return {
-      x: (e.clientX - rect.left) * (180 / rect.width),
-      y: (e.clientY - rect.top) * (180 / rect.height),
-    };
-  }
-
-  function nearestVertex(p) {
-    let best = null, bestDist = Infinity;
-    DIALS.forEach((d, i) => {
-      const a = angleFor(i);
-      const frac = knobs[d.key].value / 100;
-      const vx = cx + Math.cos(a) * maxR * frac, vy = cy + Math.sin(a) * maxR * frac;
-      const dist = Math.hypot(p.x - vx, p.y - vy);
-      if (dist < bestDist) { bestDist = dist; best = { key: d.key, i, dist }; }
-    });
-    return best;
-  }
-
-  function valueFromPointer(p, i) {
-    const a = angleFor(i);
-    const proj = (p.x - cx) * Math.cos(a) + (p.y - cy) * Math.sin(a);  // project onto this dial's axis
-    return Math.max(0, Math.min(1, proj / maxR)) * 100;
-  }
-
-  const GRAB_RADIUS = 16;
-
-  svg.addEventListener('pointerdown', e => {
-    const p = svgPoint(e);
-    const nearest = nearestVertex(p);
-    if (!nearest || nearest.dist > GRAB_RADIUS) return;  // must grab close to an actual vertex
-    draggingDialKey = nearest.key;
-    svg.setPointerCapture(e.pointerId);
-    document.body.classList.add('dragging-star');
-    knobs[nearest.key].value = valueFromPointer(p, nearest.i);
-    drawStarChart();
-    e.preventDefault();
-  });
-
-  svg.addEventListener('pointermove', e => {
-    const p = svgPoint(e);
-    if (!draggingDialKey) {
-      // hover feedback: only promise "grab" when the pointer is actually over a
-      // handle, since anywhere else on the chart does nothing when you press
-      const nearest = nearestVertex(p);
-      const overHandle = nearest && nearest.dist <= GRAB_RADIUS;
-      if (hoverDialKey !== (overHandle ? nearest.key : null)) {
-        hoverDialKey = overHandle ? nearest.key : null;
-        drawStarChart();
-      }
-      svg.style.cursor = overHandle ? 'grab' : 'default';
-      return;
-    }
-    const i = DIALS.findIndex(d => d.key === draggingDialKey);
-    knobs[draggingDialKey].value = valueFromPointer(p, i);
-    drawStarChart();
-  });
-
-  svg.addEventListener('pointerleave', () => {
-    if (hoverDialKey !== null) { hoverDialKey = null; drawStarChart(); }
-  });
-
-  const stop = () => {
-    if (!draggingDialKey) return;
-    draggingDialKey = null;
-    document.body.classList.remove('dragging-star');
-    drawStarChart();
-  };
-  svg.addEventListener('pointerup', stop);
-  svg.addEventListener('pointercancel', stop);
-  svg.addEventListener('lostpointercapture', stop);
-}
-
 buildDials();
 drawStarChart();
-setupStarChartDrag();
 
-// ---- Randomise: combines word banks for a huge variety of chillout prompts ----
-const BANKS = {
-  scene: ['rainy city window', 'quiet forest cabin', 'empty beach at dawn', 'late-night study room',
-    'mountain cabin in winter', 'desert night sky', 'abandoned greenhouse', 'rooftop at sunset',
-    'misty harbor', 'old bookstore', 'train window at dusk', 'candlelit room', 'snowfall outside a cafe',
-    'riverside dock', 'attic with dusty sunlight', 'empty subway platform', 'lighthouse at low tide',
-    'greenhouse in the rain', 'observatory at midnight', 'porch during a thunderstorm'],
-  texture: ['warm rhodes chords', 'soft analog pads', 'vinyl crackle', 'gentle piano', 'muted trumpet',
-    'acoustic guitar harmonics', 'field recordings of rain', 'tape hiss', 'felt piano', 'glockenspiel',
-    'cello drone', 'music box melody', 'granular synth textures', 'soft flute', 'detuned synth strings',
-    'hand percussion', 'wind chimes', 'distant thunder', 'shortwave radio static', 'bowed vibraphone',
-    'warm sub bass', 'nylon guitar', 'mellotron strings', 'soft marimba'],
-  mood: ['nostalgic', 'weightless', 'hazy', 'introspective', 'tender', 'wistful', 'serene', 'dreamy',
-    'melancholic but warm', 'hopeful', 'quiet and unhurried', 'softly euphoric', 'contemplative', 'gently uplifting'],
-  light: ['golden hour light', 'blue hour stillness', '3am quiet', 'early morning fog', 'late afternoon haze',
-    'midnight calm', 'first light', 'overcast afternoon', 'dusk settling in'],
+// ---- Vibe Matrix & Archetypes ----
+const VIBE_CATEGORIES = {
+  genre: [
+    'Lofi Chillhop', 'Ambient Drone', 'Deep House Yoga', 'Liquid Downtempo',
+    'Neo-Soul Rhodes', 'Organic Folk Ambient', 'Cosmic Meditation', 'Bossa Chill',
+    'Felt Piano Solo', 'Dub Techno Chill', 'Cinematic Ambient', 'Acoustic Zen'
+  ],
+  texture: [
+    'Vinyl Crackle', 'Rain on Window', 'Analog Tape Warmth', 'Muted Rhodes',
+    'Warm Sub Bass', 'Felt Piano', 'Bowed Cello', 'Wind Chimes', 'Distant Thunder',
+    'Tape Flutter', 'Acoustic Harmonics', 'Glockenspiel', 'Modular Synth Drone'
+  ],
+  mood: [
+    'Nostalgic', 'Weightless', 'Midnight Calm', 'Golden Hour Haze',
+    'Introspective Zen', 'Softly Euphoric', 'Quiet Reverie', 'Deep Focus',
+    'Tender', 'Wistful', 'Ethereal', 'Gently Uplifting'
+  ],
+  musical: [
+    '60 BPM', '72 BPM', '84 BPM', '95 BPM', 'Beatless Free-time',
+    'D Minor (Soulful)', 'F# Major (Ethereal)', 'A Minor (Nocturnal)',
+    'C Major (Pure)', 'Pentatonic Serenity', 'Sustained Chords', 'Walking Bass'
+  ]
 };
-function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-function pickTwoDistinct(arr) {
-  const a = pick(arr);
-  let b = pick(arr);
-  while (b === a) b = pick(arr);
-  return [a, b];
-}
-function randomisePrompt() {
-  const [tex1, tex2] = pickTwoDistinct(BANKS.texture);
-  const parts = [pick(BANKS.mood), pick(BANKS.scene), tex1, tex2, pick(BANKS.light)];
-  document.getElementById('prompt').value = parts.join(', ');
+
+let currentVibeTab = 'genre';
+function switchVibeTab(tab) {
+  currentVibeTab = tab;
+  ['genre', 'texture', 'mood', 'musical'].forEach(t => {
+    const el = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (el) el.classList.toggle('active', t === tab);
+  });
+  renderVibeTags();
 }
 
+function renderVibeTags() {
+  const tray = document.getElementById('vibeTagTray');
+  tray.innerHTML = '';
+  const list = VIBE_CATEGORIES[currentVibeTab] || [];
+  const curPrompt = document.getElementById('prompt').value.toLowerCase();
+  list.forEach(tag => {
+    const chip = document.createElement('div');
+    const isActive = curPrompt.includes(tag.toLowerCase());
+    chip.className = 'tag-chip' + (isActive ? ' active' : '');
+    chip.textContent = (isActive ? '✓ ' : '+ ') + tag;
+    chip.onclick = () => toggleVibeTag(tag);
+    tray.appendChild(chip);
+  });
+}
+
+function toggleVibeTag(tag) {
+  const p = document.getElementById('prompt');
+  const text = p.value;
+  const tagLow = tag.toLowerCase();
+  const items = text.split(',').map(s => s.trim()).filter(Boolean);
+  const idx = items.findIndex(s => s.toLowerCase() === tagLow);
+  if (idx >= 0) {
+    items.splice(idx, 1);
+  } else {
+    items.push(tag);
+  }
+  p.value = items.join(', ');
+  renderVibeTags();
+}
+
+renderVibeTags();
+
+const ARCHETYPES = {
+  zen: {
+    prompt: '432Hz ambient drone, Tibetan singing bowls, warm analog pads, serene, weightless, sustained',
+    dials: { warmth: 90, reverb: 95, tempo: 20, lofi: 15, melodic: 60, density: 30 },
+    noDrums: true, noVocals: true, noBass: false, noHarshHighs: true
+  },
+  lofi: {
+    prompt: 'dusty vinyl rhodes, slow hip hop beat, rain outside window, tape flutter, nostalgic, warm sub bass',
+    dials: { warmth: 80, reverb: 60, tempo: 48, lofi: 85, melodic: 70, density: 60 },
+    noDrums: false, noVocals: true, noBass: false, noHarshHighs: false
+  },
+  sunset: {
+    prompt: 'warm nylon acoustic guitar, muted jazz trumpet, golden hour pad, soft marimba, gentle uplifting groove',
+    dials: { warmth: 75, reverb: 65, tempo: 55, lofi: 40, melodic: 85, density: 50 },
+    noDrums: false, noVocals: true, noBass: false, noHarshHighs: false
+  },
+  celestial: {
+    prompt: 'shimmering glass marimba, weightless interstellar drone, detuned synth strings, bowed vibraphone, cosmic calm',
+    dials: { warmth: 60, reverb: 90, tempo: 30, lofi: 25, melodic: 75, density: 40 },
+    noDrums: true, noVocals: true, noBass: false, noHarshHighs: true
+  },
+  rain: {
+    prompt: 'gentle upright felt piano, footsteps on pavement, rain on window glass, cozy ambient room, warm rhodes chords',
+    dials: { warmth: 85, reverb: 70, tempo: 40, lofi: 65, melodic: 80, density: 45 },
+    noDrums: true, noVocals: true, noBass: false, noHarshHighs: false
+  }
+};
+
+function applyArchetype(key) {
+  const arch = ARCHETYPES[key];
+  if (!arch) return;
+  document.getElementById('prompt').value = arch.prompt;
+  Object.keys(arch.dials).forEach(k => {
+    if (knobs[k]) knobs[k].set(arch.dials[k]);
+  });
+  drawStarChart();
+  document.getElementById('noDrums').checked = arch.noDrums;
+  document.getElementById('noVocals').checked = arch.noVocals;
+  document.getElementById('noBass').checked = arch.noBass;
+  document.getElementById('noHarshHighs').checked = arch.noHarshHighs;
+  renderVibeTags();
+}
+
+// Alchemist / Prompt Generator
+const ALCHEMIST_BANKS = {
+  scenes: ['misty mountain pavilion', 'late-night Kyoto alleyway', 'quiet seaside dock at 4am', 'desert stargazing plateau', 'solitary lighthouse during rain', 'candlelit library nook', 'greenhouse during snowfall', 'rooftop at dusk', 'forest glade with morning dew', 'abandoned cathedral bathed in sunbeams'],
+  textures: ['gentle felt piano', 'dusty vinyl rhodes', 'warm acoustic harmonics', 'soft analog Prophet pads', 'bowed vibraphone', 'subtle tape hiss', 'gentle ocean waves', 'distant thunder rolling', 'vintage mellotron strings', 'sub low-end warmth'],
+  moods: ['deeply peaceful', 'nostalgic warmth', 'timeless and still', 'tender reverie', 'weightless calm', 'softly euphoric', 'contemplative zen', 'luminous stillness']
+};
+
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function alchemistPrompt() {
+  const scene = pick(ALCHEMIST_BANKS.scenes);
+  const tex1 = pick(ALCHEMIST_BANKS.textures);
+  let tex2 = pick(ALCHEMIST_BANKS.textures);
+  while (tex2 === tex1) tex2 = pick(ALCHEMIST_BANKS.textures);
+  const mood = pick(ALCHEMIST_BANKS.moods);
+  document.getElementById('prompt').value = `${mood}, ${scene}, ${tex1}, ${tex2}`;
+  renderVibeTags();
+}
+
+function randomisePrompt() {
+  alchemistPrompt();
+}
+
+function copyPrompt() {
+  const val = document.getElementById('prompt').value;
+  if (!val) return;
+  navigator.clipboard.writeText(val).then(() => {
+    const btn = document.getElementById('copyPromptBtn');
+    btn.textContent = '✓';
+    setTimeout(() => { btn.textContent = '📋'; }, 1500);
+  });
+}
+
+function clearPrompt() {
+  document.getElementById('prompt').value = '';
+  renderVibeTags();
+}
+
+// ---- Name Generator & Aesthetic Universes ----
+const NAME_UNIVERSES = {
+  celestial: {
+    adj: ['Astral', 'Solstice', 'Starlight', 'Eclipse', 'Nebula', 'Zenith', 'Lunar', 'Supernova', 'Pulsar', 'Andromeda', 'Celestial', 'Eventide', 'Equinox', 'Solar'],
+    noun: ['Orbit', 'Corona', 'Constellation', 'Horizon', 'Singularity', 'Void', 'Atmosphere', 'Dust', 'Radiance', 'Aurora', 'Twilight', 'Firmament']
+  },
+  tideline: {
+    adj: ['Stillwater', 'Tidepool', 'Undertow', 'Coastal', 'Deep Blue', 'Driftwood', 'Cascade', 'Shoal', 'Saltwater', 'Aquamarine', 'Pelagic', 'Submerged'],
+    noun: ['Current', 'Mist', 'Lagoon', 'Shores', 'Reef', 'Abyss', 'Ripple', 'Sanctuary', 'Breeze', 'Estuary', 'Tides', 'Harbor']
+  },
+  obsidian: {
+    adj: ['Velvet', 'Hollow', 'Midnight', 'Onyx', 'Obsidian', 'Nocturne', 'Dim', 'Shadow', 'Moonlit', 'Smokey', 'Subtle', 'Lowlight'],
+    noun: ['Hush', 'Silhouette', 'Echo', 'Lantern', 'Reverie', 'Candle', 'Sanctum', 'Drift', 'Ember', 'Glow', 'Chamber', 'Whisper']
+  },
+  zen: {
+    adj: ['Silent', 'Harmonious', 'Pure', 'Weightless', 'Timeless', 'Serene', 'Unbroken', 'Gentle', 'Sacred', 'Kanso', 'Satori', 'Peaceful'],
+    noun: ['Lotus', 'Sanctuary', 'Breath', 'Meadow', 'Solitude', 'Presence', 'Awakening', 'Stone', 'Garden', 'Monolith', 'Stillness', 'Bonsai']
+  },
+  organic: {
+    adj: ['Amber', 'Golden', 'Honey', 'Terracotta', 'Cedar', 'Autumn', 'Linen', 'Sunbeam', 'Faded', 'Warm', 'Botanical', 'Mossy'],
+    noun: ['Hearth', 'Petal', 'Bloom', 'Grove', 'Timber', 'Roots', 'Canopy', 'Bough', 'Soil', 'Sandalwood', 'Orchard', 'Branch']
+  }
+};
+
+const JAPANESE_CONCEPTS = [
+  'Komorebi (Sunlight Through Leaves)',
+  'Yūgen (Profound Grace)',
+  'Mono no Aware (Sweet Transience)',
+  'Wabi-Sabi (Flawed Beauty)',
+  'Shinrin-yoku (Forest Bathing)',
+  'Kanso (Simplicity and Calm)',
+  'Shibui (Subtle Refinement)',
+  'Satori (Sudden Awakening)'
+];
+
+function generateOneTitle() {
+  const universeKey = document.getElementById('titleUniverse').value;
+  const formula = document.getElementById('titleFormula').value;
+  
+  let uKeys = universeKey === 'all' ? Object.keys(NAME_UNIVERSES) : [universeKey];
+  const u = NAME_UNIVERSES[pick(uKeys)];
+  
+  let chosenFormula = formula;
+  if (formula === 'random') {
+    const formulas = ['adj_noun', 'noun_of_noun', 'verbing', 'japanese', 'opus'];
+    chosenFormula = pick(formulas);
+  }
+
+  if (chosenFormula === 'japanese') {
+    return pick(JAPANESE_CONCEPTS);
+  } else if (chosenFormula === 'opus') {
+    const num = Math.floor(Math.random() * 24) + 1;
+    return `Tranquilicy Opus ${num} in ${pick(['D Minor', 'F# Major', 'A Minor', 'C#', 'E Minor'])}`;
+  } else if (chosenFormula === 'noun_of_noun') {
+    return `The ${pick(u.noun)} of ${pick(u.noun)}`;
+  } else if (chosenFormula === 'verbing') {
+    const verbs = ['Drifting Through', 'Resting Upon', 'Breathing Inside', 'Wandering Past', 'Gazing Into'];
+    return `${pick(verbs)} ${pick(u.noun)}`;
+  } else {
+    return `${pick(u.adj)} ${pick(u.noun)}`;
+  }
+}
+
+function rerollTitle() {
+  const t = generateOneTitle();
+  document.getElementById('trackTitle').value = t;
+  updateDownloadNames();
+  refreshPreview();
+}
+
+function generateBatchTitles() {
+  const tray = document.getElementById('titlePillTray');
+  tray.innerHTML = '';
+  for (let i = 0; i < 5; i++) {
+    const t = generateOneTitle();
+    const pill = document.createElement('div');
+    pill.className = 'title-pill';
+    pill.textContent = t;
+    pill.onclick = () => {
+      document.getElementById('trackTitle').value = t;
+      updateDownloadNames();
+      refreshPreview();
+    };
+    tray.appendChild(pill);
+  }
+}
+generateBatchTitles();
+
+// ---- Build Full Prompts for Server ----
 function buildPrompt() {
   const parts = ['chillout'];
   DIALS.forEach(d => parts.push(d.describe(knobs[d.key].value)));
-  // Positive steers only. The exclusions go to the negative branch instead --
-  // writing "no drums" here would just feed the model the word "drums".
   if (document.getElementById('noDrums').checked) parts.push('beatless, free-time, sustained');
   if (document.getElementById('noVocals').checked) parts.push('instrumental');
   const extra = document.getElementById('prompt').value.trim();
@@ -1261,20 +1642,92 @@ function buildPrompt() {
   return parts.join(', ');
 }
 
-// Terms fed to the classifier-free-guidance negative branch, which the model is
-// actively pushed away from.
 const EXCLUDE_TERMS = {
   noDrums: 'drums, percussion, drum beat, kick drum, snare, hi-hats, rhythmic beat',
   noVocals: 'vocals, singing, voice, choir, lyrics, spoken word',
   noBass: 'bass guitar, deep bass, sub bass, heavy low end',
+  noHarshHighs: 'harsh highs, screaming synths, aggressive lead, brass stabs'
 };
+
 function buildNegativePrompt() {
   return Object.keys(EXCLUDE_TERMS)
-    .filter(id => document.getElementById(id).checked)
+    .filter(id => {
+      const el = document.getElementById(id);
+      return el && el.checked;
+    })
     .map(id => EXCLUDE_TERMS[id])
     .join(', ');
 }
 
+// ---- Step Flow Tracking ----
+const flow = { generated: false, mastered: false, rendered: false };
+
+function setNodeState(nodeId, cardId, state) {
+  document.getElementById(nodeId).className = 'rail-node' + (state ? ' ' + state : '');
+  const card = document.getElementById(cardId);
+  card.classList.toggle('is-active', state === 'active');
+  card.classList.toggle('is-done', state === 'done');
+}
+
+function renderFlow() {
+  setNodeState('railStep1', 'generateCard', flow.generated ? 'done' : 'active');
+  setNodeState('railStep2', 'audioCard', !flow.generated ? '' : (flow.mastered ? 'done' : 'active'));
+  setNodeState('railStep3', 'videoCard', !flow.generated ? '' : (flow.rendered ? 'done' : 'active'));
+  document.getElementById('railLine1').classList.toggle('filled', flow.generated);
+  document.getElementById('railLine2').classList.toggle('filled', flow.generated);
+}
+
+function setCardEnabled(id, enabled) {
+  const card = document.getElementById(id);
+  const wasDisabled = card.classList.contains('disabled');
+  card.classList.toggle('disabled', !enabled);
+  card.inert = !enabled;
+  card.setAttribute('aria-hidden', enabled ? 'false' : 'true');
+  return wasDisabled && enabled;
+}
+
+function unlockExportSteps() {
+  [['audioCard', 0], ['videoCard', 160]].forEach(([id, delay]) => {
+    const justUnlocked = setCardEnabled(id, true);
+    if (!justUnlocked) return;
+    const card = document.getElementById(id);
+    setTimeout(() => {
+      card.classList.add('unlocking');
+      card.addEventListener('animationend', function done(e) {
+        if (e.animationName !== 'unlockRise') return;
+        card.classList.remove('unlocking');
+        card.removeEventListener('animationend', done);
+      });
+    }, delay);
+  });
+}
+renderFlow();
+
+function buildFilename(ext) {
+  const title = (document.getElementById('trackTitle').value || 'Untitled Chillout Track').trim();
+  const pattern = document.getElementById('namePattern').value;
+  let name;
+  switch (pattern) {
+    case 'numbered-dash': name = '01 - ' + title; break;
+    case 'numbered-dot': name = '01. ' + title; break;
+    case 'extended': name = title + ' (Extended Mix)'; break;
+    case 'instrumental': name = title + ' (Instrumental Mix)'; break;
+    case 'slowed': name = title + ' [Slowed + Reverb]'; break;
+    default: name = title;
+  }
+  const safe = name.replace(/[\/:*?"<>|]/g, '').trim() || 'track';
+  return `${safe}.${ext}`;
+}
+
+let lastMasterExt = 'wav';
+function updateDownloadNames() {
+  if (lastAudioUrl) setChip('downloadBtn', lastAudioUrl, buildFilename('wav'));
+  if (lastMasterUrl) document.getElementById('masterChip').download = buildFilename(lastMasterExt);
+  if (lastVideoUrl) document.getElementById('downloadVideoBtn').download = buildFilename('webm');
+  if (lastStillUrl) document.getElementById('stillChip').download = buildFilename('png');
+}
+
+// ---- Audio Generation Handler ----
 async function generate() {
   const btn = document.getElementById('genBtn');
   const outbar = document.getElementById('outbar');
@@ -1298,15 +1751,11 @@ async function generate() {
   statusPct.textContent = '0%';
   statusLabel.textContent = dur > 30 ? 'Generating (chained)...' : 'Generating...';
 
-  // Everything exported from the PREVIOUS track is now stale -- without this the
-  // chips keep pointing at old renders under the new track's filenames, which is
-  // worse than offering nothing at all.
   ['downloadBtn', 'masterChip', 'downloadVideoBtn', 'stillChip'].forEach(id => setChip(id, null));
   [lastVideoUrl, lastMasterUrl, lastStillUrl].forEach(u => { if (u) URL.revokeObjectURL(u); });
   lastVideoUrl = lastMasterUrl = lastStillUrl = null;
   setVidStatus('');
   document.getElementById('masterStatus').style.display = 'none';
-  // steps 02/03 were completed against the OLD track, so they're no longer done
   flow.mastered = false;
   flow.rendered = false;
   renderFlow();
@@ -1328,8 +1777,6 @@ async function generate() {
     while (true) {
       await new Promise(r => setTimeout(r, 400));
       const s = await (await fetch('/status/' + job_id)).json();
-      // check the error first: an error payload carries no `progress`, and
-      // rendering it anyway flashes "NaN%" before the throw lands
       if (s.error) throw new Error(s.error);
       if (typeof s.progress === 'number') {
         const pct = Math.round(s.progress * 100);
@@ -1347,9 +1794,8 @@ async function generate() {
     player.src = url;
 
     playerWrap.hidden = false;
-    // next frame, so the browser has a non-hidden element to transition from
     requestAnimationFrame(() => playerWrap.classList.add('ready'));
-    player.play().catch(() => {});  // autoplay can be refused; not worth failing the run over
+    player.play().catch(() => {});
 
     statusLabel.textContent = `Ready · ${dur}s`;
     statusPct.textContent = '';
@@ -1358,15 +1804,13 @@ async function generate() {
     renderFlow();
     unlockExportSteps();
     if (!document.getElementById('trackTitle').value.trim()) rerollTitle();
-    updateDownloadNames();  // also lights the WAV chip
+    updateDownloadNames();
     refreshPreview();
   } catch (e) {
     errorText.textContent = e.message === 'Cancelled' ? 'Cancelled.' : 'Error: ' + e.message;
     errorText.style.display = 'block';
     barInner.style.width = '0%';
     statusPct.textContent = '';
-    // the previous track's blob URL is only revoked on success, so if this run
-    // failed the old one is still playable -- restore it rather than blanking
     if (flow.generated && player.src) {
       playerWrap.hidden = false;
       requestAnimationFrame(() => playerWrap.classList.add('ready'));
@@ -1388,100 +1832,167 @@ async function cancelGeneration() {
   cancelBtn.textContent = 'Cancelling...';
   try {
     await fetch('/cancel/' + currentJobId, { method: 'POST' });
-  } catch (e) { /* the poll loop will surface whatever actually happened */ }
+  } catch (e) {}
   cancelBtn.textContent = 'Cancel';
 }
 
-// ---- Creative Export: title, mastering, social video/waveform studio ----
+// ---- Audio Graph & Web Audio Tone Shaping ----
+let audioCtx = null, analyserNode = null, mediaStreamDest = null;
+let toneLowShelf = null, toneMidPeak = null, toneHighShelf = null;
+let lofiHighPass = null, lofiLowPass = null;
+let ambientSource = null, ambientGain = null, ambientBuffer = null;
 
-const TITLE_WORDS = {
-  adj: ['Amber', 'Velvet', 'Quiet', 'Hollow', 'Distant', 'Gentle', 'Faded', 'Midnight',
-    'Golden', 'Hazy', 'Slow', 'Soft', 'Drifting', 'Muted', 'Warm', 'Still'],
-  noun: ['Tideline', 'Hush', 'Static', 'Bloom', 'Horizon', 'Ember', 'Fog', 'Reverie',
-    'Lantern', 'Echo', 'Harbor', 'Stillwater', 'Glow', 'Dust', 'Current', 'Sanctuary'],
-};
-function rerollTitle() {
-  document.getElementById('trackTitle').value = `${pick(TITLE_WORDS.adj)} ${pick(TITLE_WORDS.noun)}`;
-  updateDownloadNames();
-  refreshPreview();
+async function ensureAudioGraph() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioCtx.createMediaElementSource(document.getElementById('player'));
+    
+    // EQ Filters
+    toneLowShelf = audioCtx.createBiquadFilter();
+    toneLowShelf.type = 'lowshelf';
+    toneLowShelf.frequency.value = 120;
+    
+    toneMidPeak = audioCtx.createBiquadFilter();
+    toneMidPeak.type = 'peaking';
+    toneMidPeak.frequency.value = 1500;
+    toneMidPeak.Q.value = 1.0;
+    
+    toneHighShelf = audioCtx.createBiquadFilter();
+    toneHighShelf.type = 'highshelf';
+    toneHighShelf.frequency.value = 8000;
+    
+    // Lo-Fi Bandpass
+    lofiHighPass = audioCtx.createBiquadFilter();
+    lofiHighPass.type = 'highpass';
+    lofiHighPass.frequency.value = 20; // bypass default
+    
+    lofiLowPass = audioCtx.createBiquadFilter();
+    lofiLowPass.type = 'lowpass';
+    lofiLowPass.frequency.value = 20000; // bypass default
+
+    analyserNode = audioCtx.createAnalyser();
+    analyserNode.fftSize = 1024;
+    analyserNode.smoothingTimeConstant = 0.82;
+
+    mediaStreamDest = audioCtx.createMediaStreamDestination();
+
+    // Wire player chain
+    source.connect(toneLowShelf);
+    toneLowShelf.connect(toneMidPeak);
+    toneMidPeak.connect(toneHighShelf);
+    toneHighShelf.connect(lofiHighPass);
+    lofiHighPass.connect(lofiLowPass);
+    lofiLowPass.connect(analyserNode);
+
+    analyserNode.connect(audioCtx.destination);
+    analyserNode.connect(mediaStreamDest);
+
+    // Ambient noise node
+    ambientGain = audioCtx.createGain();
+    ambientGain.gain.value = 0.0;
+    ambientGain.connect(analyserNode);
+  }
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
 }
 
-// Every chip agrees on naming, and re-derives it whenever the title or filename
-// pattern changes.
-function updateDownloadNames() {
-  if (lastAudioUrl) setChip('downloadBtn', lastAudioUrl, buildFilename('wav'));
-  if (lastMasterUrl) document.getElementById('masterChip').download = buildFilename(lastMasterExt);
-  if (lastVideoUrl) document.getElementById('downloadVideoBtn').download = buildFilename('webm');
-  if (lastStillUrl) document.getElementById('stillChip').download = buildFilename('png');
-}
-let lastMasterExt = 'wav';
+function updateToneEq() {
+  if (!toneLowShelf) return;
+  const w = parseFloat(document.getElementById('toneWarmth').value);
+  const a = parseFloat(document.getElementById('toneAir').value);
+  const isLofi = document.getElementById('lofiFilter').checked;
+  
+  document.getElementById('warmthVal').textContent = w;
+  document.getElementById('airVal').textContent = a;
+  
+  toneLowShelf.gain.value = w;
+  toneHighShelf.gain.value = a;
 
-// `pointer-events: none` alone still leaves everything inside a "disabled" card
-// reachable by Tab, so the cards use `inert` to actually take them out of play.
-function setCardEnabled(id, enabled) {
-  const card = document.getElementById(id);
-  const wasDisabled = card.classList.contains('disabled');
-  card.classList.toggle('disabled', !enabled);
-  card.inert = !enabled;
-  card.setAttribute('aria-hidden', enabled ? 'false' : 'true');
-  return wasDisabled && enabled;  // true only on the locked -> unlocked transition
-}
-
-// ---- Step flow: 01 Generate -> 02 Master -> 03 Video ----
-const flow = { generated: false, mastered: false, rendered: false };
-
-function setNodeState(nodeId, cardId, state) {
-  document.getElementById(nodeId).className = 'rail-node' + (state ? ' ' + state : '');
-  const card = document.getElementById(cardId);
-  card.classList.toggle('is-active', state === 'active');
-  card.classList.toggle('is-done', state === 'done');
+  if (isLofi) {
+    lofiHighPass.frequency.value = 320;
+    lofiLowPass.frequency.value = 4200;
+  } else {
+    lofiHighPass.frequency.value = 20;
+    lofiLowPass.frequency.value = 20000;
+  }
 }
 
-function renderFlow() {
-  setNodeState('railStep1', 'generateCard', flow.generated ? 'done' : 'active');
-  setNodeState('railStep2', 'audioCard', !flow.generated ? '' : (flow.mastered ? 'done' : 'active'));
-  setNodeState('railStep3', 'videoCard', !flow.generated ? '' : (flow.rendered ? 'done' : 'active'));
-  document.getElementById('railLine1').classList.toggle('filled', flow.generated);
-  document.getElementById('railLine2').classList.toggle('filled', flow.generated);
+// Procedural Ambient Layers
+function createVinylBuffer(ctx) {
+  const sr = ctx.sampleRate, dur = 5;
+  const buf = ctx.createBuffer(1, sr * dur, sr);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) {
+    // subtle background hiss
+    data[i] = (Math.random() * 2 - 1) * 0.012;
+    // random vinyl pops
+    if (Math.random() < 0.00045) {
+      data[i] = (Math.random() * 2 - 1) * 0.18;
+    }
+  }
+  return buf;
 }
 
-// Unlocking steps 02 and 03 together, staggered, so the eye follows the flow
-// left to right rather than both cards lighting up at once.
-function unlockExportSteps() {
-  [['audioCard', 0], ['videoCard', 160]].forEach(([id, delay]) => {
-    const justUnlocked = setCardEnabled(id, true);
-    if (!justUnlocked) return;
-    const card = document.getElementById(id);
-    setTimeout(() => {
-      card.classList.add('unlocking');
-      card.addEventListener('animationend', function done(e) {
-        if (e.animationName !== 'unlockRise') return;
-        card.classList.remove('unlocking');
-        card.removeEventListener('animationend', done);
-      });
-    }, delay);
+function createRainBuffer(ctx) {
+  const sr = ctx.sampleRate, dur = 5;
+  const buf = ctx.createBuffer(1, sr * dur, sr);
+  const data = buf.getChannelData(0);
+  let lastOut = 0.0;
+  for (let i = 0; i < data.length; i++) {
+    const white = Math.random() * 2 - 1;
+    lastOut = (lastOut + (0.02 * white)) / 1.02; // pinking filter
+    data[i] = lastOut * 0.12;
+    if (Math.random() < 0.0008) {
+      data[i] += (Math.random() - 0.5) * 0.08;
+    }
+  }
+  return buf;
+}
+
+async function updateAmbientLayer() {
+  await ensureAudioGraph();
+  const mode = document.getElementById('ambientSelect').value;
+  if (ambientSource) {
+    try { ambientSource.stop(); } catch(e){}
+    ambientSource.disconnect();
+    ambientSource = null;
+  }
+  if (mode === 'off') {
+    ambientGain.gain.value = 0.0;
+    return;
+  }
+  const buf = mode === 'vinyl' ? createVinylBuffer(audioCtx) : createRainBuffer(audioCtx);
+  ambientSource = audioCtx.createBufferSource();
+  ambientSource.buffer = buf;
+  ambientSource.loop = true;
+  ambientSource.connect(ambientGain);
+  ambientSource.start();
+  updateAmbientVol();
+}
+
+function updateAmbientVol() {
+  const v = parseFloat(document.getElementById('ambientVol').value) / 100;
+  document.getElementById('ambientVolVal').textContent = Math.round(v * 100);
+  if (ambientGain) ambientGain.gain.value = v * 0.45;
+}
+
+// Player controls
+function setSpeed(s) {
+  const p = document.getElementById('player');
+  p.playbackRate = s;
+  ['075', '100', '125'].forEach(x => {
+    document.getElementById('speed' + x + 'Btn').classList.toggle('active', s === (x === '075' ? 0.75 : (x === '100' ? 1.0 : 1.25)));
   });
 }
 
-renderFlow();
-
-function buildFilename(ext) {
-  const title = (document.getElementById('trackTitle').value || 'Untitled Chillout Track').trim();
-  const pattern = document.getElementById('namePattern').value;
-  let name;
-  switch (pattern) {
-    case 'numbered-dash': name = '01 - ' + title; break;
-    case 'numbered-dot': name = '01. ' + title; break;
-    case 'extended': name = title + ' (Extended Mix)'; break;
-    case 'instrumental': name = title + ' (Instrumental Mix)'; break;
-    case 'slowed': name = title + ' [Slowed + Reverb]'; break;
-    default: name = title;
-  }
-  const safe = name.replace(/[\\/:*?"<>|]/g, '').trim() || 'track';
-  return `${safe}.${ext}`;
+function togglePlayerLoop() {
+  const p = document.getElementById('player');
+  p.loop = !p.loop;
+  const btn = document.getElementById('playerLoopBtn');
+  btn.textContent = p.loop ? '🔁 Loop: On' : '🔁 Loop: Off';
+  btn.classList.toggle('active', p.loop);
 }
 
-// ---- Audio shaping controls ----
+// Sliders and Mastering
 function bindSlider(id, valId) {
   const el = document.getElementById(id), out = document.getElementById(valId);
   const sync = () => { out.textContent = el.value; };
@@ -1491,9 +2002,9 @@ function bindSlider(id, valId) {
 bindSlider('stereoWidth', 'widthVal');
 bindSlider('fadeIn', 'fadeInVal');
 bindSlider('fadeOut', 'fadeOutVal');
+bindSlider('masterWarmth', 'masterWarmthVal');
+bindSlider('masterAir', 'masterAirVal');
 
-// A looping track must not fade, so the server ignores the fades when seamless is
-// on -- reflect that in the UI instead of leaving dead controls that look live.
 const seamlessEl = document.getElementById('seamlessLoop');
 function syncSeamlessState() {
   const fields = document.getElementById('fadeFields');
@@ -1523,6 +2034,8 @@ async function downloadMastered() {
       preset: document.getElementById('masterPreset').value,
       fmt,
       width: (parseFloat(document.getElementById('stereoWidth').value) / 100).toFixed(3),
+      warmth: (parseFloat(document.getElementById('masterWarmth').value) / 100).toFixed(3),
+      air: (parseFloat(document.getElementById('masterAir').value) / 100).toFixed(3),
       seamless: seamlessEl.checked ? 'true' : 'false',
       fade_in: document.getElementById('fadeIn').value,
       fade_out: document.getElementById('fadeOut').value,
@@ -1533,10 +2046,7 @@ async function downloadMastered() {
     if (lastMasterUrl) URL.revokeObjectURL(lastMasterUrl);
     lastMasterUrl = URL.createObjectURL(blob);
     lastMasterExt = fmt.toLowerCase();
-    // the result lands as a chip in the output bar rather than downloading
-    // straight away, so every artefact lives in one place
-    setChip('masterChip', lastMasterUrl, buildFilename(lastMasterExt),
-            `${fmt} · ${humanSize(blob.size)}`);
+    setChip('masterChip', lastMasterUrl, buildFilename(lastMasterExt), `${fmt} · ${humanSize(blob.size)}`);
     status.textContent = 'Ready in the bar below';
     status.style.display = 'block';
     flow.mastered = true;
@@ -1550,35 +2060,61 @@ async function downloadMastered() {
   }
 }
 
-// -- Video/waveform studio --
+// ---- Video & Visualizer Studio ----
 const PALETTES = {
   gold: ['#D4B97A', '#C1A673'],
   ember: ['#E3A868', '#8C5A34'],
   moonlit: ['#DCE6E2', '#7C8F8C'],
+  amethyst: ['#C4A1E8', '#6F5299'],
+  emerald: ['#9FD4A6', '#4A7A55']
 };
-const ASPECTS = { '9:16': [540, 960], '1:1': [720, 720], '16:9': [960, 540] };
 
-let audioCtx = null, analyserNode = null, mediaStreamDest = null;
-async function ensureAudioGraph() {
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const source = audioCtx.createMediaElementSource(document.getElementById('player'));
-    analyserNode = audioCtx.createAnalyser();
-    analyserNode.fftSize = 1024;
-    mediaStreamDest = audioCtx.createMediaStreamDestination();
-    source.connect(analyserNode);
-    analyserNode.connect(audioCtx.destination);
-    analyserNode.connect(mediaStreamDest);
+const ASPECTS = {
+  '16:9': [960, 540],
+  '9:16': [540, 960],
+  '1:1': [720, 720],
+  '4:5': [576, 720]
+};
+
+let coverImage = null;
+function handleCoverUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      coverImage = img;
+      const thumb = document.getElementById('artThumb');
+      thumb.src = ev.target.result;
+      thumb.style.display = 'block';
+      document.getElementById('artStatus').textContent = file.name;
+      document.getElementById('removeArtBtn').style.display = 'inline-block';
+      document.getElementById('vidBackdrop').value = 'custom';
+      refreshPreview();
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeCoverArt() {
+  coverImage = null;
+  const thumb = document.getElementById('artThumb');
+  thumb.src = '';
+  thumb.style.display = 'none';
+  document.getElementById('artUpload').value = '';
+  document.getElementById('artStatus').textContent = 'Click or drop custom album art (JPG/PNG)';
+  document.getElementById('removeArtBtn').style.display = 'none';
+  if (document.getElementById('vidBackdrop').value === 'custom') {
+    document.getElementById('vidBackdrop').value = 'feathers';
   }
-  // A context can be created suspended under browser autoplay policy. Routing the
-  // player through a suspended context silences BOTH playback and the recorded
-  // audio track, so this resume is what keeps rendered videos from coming out mute.
-  if (audioCtx.state === 'suspended') await audioCtx.resume();
+  refreshPreview();
 }
 
 function sizeExportCanvas() {
   const canvas = document.getElementById('exportCanvas');
-  const [w, h] = ASPECTS[document.getElementById('vidAspect').value];
+  const [w, h] = ASPECTS[document.getElementById('vidAspect').value] || [960, 540];
   canvas.width = w;
   canvas.height = h;
 }
@@ -1586,7 +2122,7 @@ function sizeExportCanvas() {
 let videoFeathers = null;
 function ensureVideoFeathers(w, h) {
   if (videoFeathers && videoFeathers.w === w && videoFeathers.h === h) return videoFeathers;
-  const count = 16;
+  const count = 18;
   videoFeathers = {
     w, h,
     particles: Array.from({ length: count }, () => ({
@@ -1605,34 +2141,95 @@ function ensureVideoFeathers(w, h) {
   return videoFeathers;
 }
 
+// Particle Nebula
+let stardustField = null;
+function ensureStardust(w, h) {
+  if (stardustField && stardustField.w === w && stardustField.h === h) return stardustField;
+  stardustField = {
+    w, h,
+    stars: Array.from({ length: 90 }, () => ({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      r: 1 + Math.random() * 2.2,
+      alpha: 0.2 + Math.random() * 0.7,
+      vx: (Math.random() - 0.5) * 6,
+      vy: (Math.random() - 0.5) * 6
+    }))
+  };
+  return stardustField;
+}
+
 let backdropLastT = null;
-function drawBackdrop(ctx, w, h, t, mode) {
+function drawBackdrop(ctx, w, h, t, mode, bassRms) {
   ctx.fillStyle = '#090807';
   ctx.fillRect(0, 0, w, h);
+
   if (mode === 'minimal') return;
+
+  if (mode === 'custom' && coverImage) {
+    const blur = parseFloat(document.getElementById('artBlur').value);
+    const dim = parseFloat(document.getElementById('artDim').value) / 100;
+    ctx.save();
+    if (blur > 0) ctx.filter = `blur(${blur}px)`;
+    // cover fill with aspect ratio preserving
+    const imgRatio = coverImage.width / coverImage.height;
+    const canvasRatio = w / h;
+    let dw, dh, dx, dy;
+    if (imgRatio > canvasRatio) {
+      dh = h * 1.08; dw = dh * imgRatio;
+      dx = (w - dw) / 2; dy = (h - dh) / 2;
+    } else {
+      dw = w * 1.08; dh = dw / imgRatio;
+      dx = (w - dw) / 2; dy = (h - dh) / 2;
+    }
+    ctx.drawImage(coverImage, dx, dy, dw, dh);
+    ctx.filter = 'none';
+    ctx.restore();
+
+    // Dim overlay
+    ctx.fillStyle = `rgba(9,8,7,${dim})`;
+    ctx.fillRect(0, 0, w, h);
+    return;
+  }
+
   if (mode === 'bloom') {
     const cx1 = w * 0.3 + Math.sin(t * 0.3) * w * 0.08, cy1 = h * 0.35 + Math.cos(t * 0.24) * h * 0.06;
-    const g1 = ctx.createRadialGradient(cx1, cy1, 0, cx1, cy1, Math.max(w, h) * 0.55);
-    g1.addColorStop(0, 'rgba(193,166,115,0.32)');
+    const g1 = ctx.createRadialGradient(cx1, cy1, 0, cx1, cy1, Math.max(w, h) * (0.55 + bassRms * 0.2));
+    g1.addColorStop(0, 'rgba(193,166,115,0.34)');
     g1.addColorStop(1, 'rgba(193,166,115,0)');
     ctx.fillStyle = g1; ctx.fillRect(0, 0, w, h);
+
     const cx2 = w * 0.75 + Math.cos(t * 0.18) * w * 0.07, cy2 = h * 0.7 + Math.sin(t * 0.27) * h * 0.07;
     const g2 = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, Math.max(w, h) * 0.45);
-    g2.addColorStop(0, 'rgba(212,185,122,0.2)');
+    g2.addColorStop(0, 'rgba(212,185,122,0.22)');
     g2.addColorStop(1, 'rgba(212,185,122,0)');
     ctx.fillStyle = g2; ctx.fillRect(0, 0, w, h);
     return;
   }
-  // feathers -- advanced by real elapsed time, not a hardcoded frame rate, so the
-  // drift looks the same whether we're rendering at 60fps or redrawing a single
-  // preview frame
+
+  if (mode === 'nebula') {
+    const dust = ensureStardust(w, h);
+    dust.stars.forEach(s => {
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r * (1 + bassRms * 0.8), 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(212,185,122,${s.alpha})`;
+      ctx.fill();
+    });
+    return;
+  }
+
+  // Feathers
   const field = ensureVideoFeathers(w, h);
   const dt = backdropLastT === null ? 0 : Math.min(Math.max(t - backdropLastT, 0), 0.1);
   backdropLastT = t;
   for (const p of field.particles) {
     p.y += p.speedY * dt;
     p.rot += p.rotSpeed * dt;
-    if (p.y - p.size * 1.3 > h) { p.y = -p.size * 1.3; p.baseX = Math.random() * w; p.phase = Math.random() * Math.PI * 2; }
+    if (p.y - p.size * 1.3 > h) {
+      p.y = -p.size * 1.3;
+      p.baseX = Math.random() * w;
+      p.phase = Math.random() * Math.PI * 2;
+    }
     p.x = p.baseX + Math.sin(t * p.swayFreq * Math.PI * 2 + p.phase) * p.swayAmp;
     ctx.save();
     ctx.translate(p.x, p.y);
@@ -1643,15 +2240,12 @@ function drawBackdrop(ctx, w, h, t, mode) {
   }
 }
 
-// When nothing is playing (static preview, still frame, or before the audio graph
-// exists) the analyser would hand back pure silence -- an empty frame or a dead
-// flat line. Synthesise a calm, deterministic shape instead so previews and
-// exported stills still look like the product.
 const IDLE_SHAPE = Array.from({ length: 512 }, (_, i) => {
   const x = i / 512;
   const env = Math.sin(Math.PI * x);
   return 128 + env * 46 * (Math.sin(x * 34) * 0.6 + Math.sin(x * 11 + 1.7) * 0.4);
 });
+
 function waveformData(kind) {
   const live = analyserNode && !document.getElementById('player').paused;
   if (kind === 'freq') {
@@ -1668,21 +2262,39 @@ function waveformData(kind) {
   return data;
 }
 
-function drawWaveform(ctx, w, h, style, palette) {
+function getBassRms() {
+  const data = waveformData('freq');
+  let sum = 0;
+  const count = Math.min(24, data.length);
+  for (let i = 0; i < count; i++) sum += data[i];
+  return (sum / (count * 255));
+}
+
+// ---- Visualizer Engines ----
+function drawWaveform(ctx, w, h, style, palette, t) {
   if (style === 'off') return;
   const [top, bottom] = PALETTES[palette] || PALETTES.gold;
   ctx.globalAlpha = 1;
+
   if (style === 'bars') {
     const data = waveformData('freq');
-    const bars = 40, step = Math.floor(data.length / bars);
-    const barW = w / bars * 0.6, gap = w / bars;
+    const bars = 48, step = Math.floor(data.length / (bars * 1.5));
+    const gap = w / bars, barW = gap * 0.62;
     for (let i = 0; i < bars; i++) {
       const v = data[i * step] / 255;
-      const barH = v * h * 0.5;
+      const barH = Math.max(3, v * h * 0.44);
+      const x = i * gap + (gap - barW) / 2;
       const grad = ctx.createLinearGradient(0, h / 2 - barH, 0, h / 2 + barH);
-      grad.addColorStop(0, top); grad.addColorStop(1, bottom);
+      grad.addColorStop(0, top);
+      grad.addColorStop(1, bottom);
       ctx.fillStyle = grad;
-      ctx.fillRect(i * gap + (gap - barW) / 2, h / 2 - barH, barW, barH * 2);
+      // Rounded bar
+      ctx.beginPath();
+      ctx.roundRect(x, h / 2 - barH, barW, barH * 2, [3, 3, 3, 3]);
+      ctx.fill();
+      // Peak cap
+      ctx.fillStyle = '#FFF8E7';
+      ctx.fillRect(x, h / 2 - barH - 3, barW, 2);
     }
   } else if (style === 'wave') {
     const data = waveformData('time');
@@ -1690,73 +2302,269 @@ function drawWaveform(ctx, w, h, style, palette) {
     const grad = ctx.createLinearGradient(0, 0, w, 0);
     grad.addColorStop(0, bottom); grad.addColorStop(0.5, top); grad.addColorStop(1, bottom);
     ctx.strokeStyle = grad;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 3.5;
+    ctx.shadowColor = top;
+    ctx.shadowBlur = 10;
     for (let i = 0; i < data.length; i++) {
       const x = (i / data.length) * w;
-      const y = h / 2 + (data[i] / 128 - 1) * h * 0.28;
+      const y = h / 2 + (data[i] / 128 - 1) * h * 0.32;
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.stroke();
+    ctx.shadowBlur = 0;
+  } else if (style === 'radial') {
+    const data = waveformData('freq');
+    const cx = w / 2, cy = h / 2;
+    const baseR = Math.min(w, h) * 0.22;
+    const bars = 72;
+    const step = Math.floor(data.length / (bars * 1.2));
+    for (let i = 0; i < bars; i++) {
+      const angle = (i / bars) * Math.PI * 2;
+      const v = data[i * step] / 255;
+      const len = v * Math.min(w, h) * 0.22;
+      const x1 = cx + Math.cos(angle) * baseR;
+      const y1 = cy + Math.sin(angle) * baseR;
+      const x2 = cx + Math.cos(angle) * (baseR + len);
+      const y2 = cy + Math.sin(angle) * (baseR + len);
+      ctx.strokeStyle = i % 2 === 0 ? top : bottom;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
   } else if (style === 'pulse') {
     const data = waveformData('time');
     let sumSq = 0;
     for (let i = 0; i < data.length; i++) { const v = data[i] / 128 - 1; sumSq += v * v; }
     const rms = Math.sqrt(sumSq / data.length);
     const cx = w / 2, cy = h / 2;
-    [1, 0.7, 0.45].forEach((f, idx) => {
-      const r = Math.min(w, h) * (0.14 + rms * 0.5) * f;
+    // Sacred lotus concentric rings
+    [1, 0.72, 0.48, 0.28].forEach((f, idx) => {
+      const r = Math.min(w, h) * (0.16 + rms * 0.5) * f;
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.strokeStyle = idx === 0 ? top : `${bottom}66`;
+      ctx.strokeStyle = idx === 0 ? top : `${bottom}77`;
       ctx.lineWidth = idx === 0 ? 2.5 : 1.2;
       ctx.stroke();
+      // Polygon facets
+      const petals = 8;
+      ctx.beginPath();
+      for (let p = 0; p < petals; p++) {
+        const a = (p / petals) * Math.PI * 2 + (t * 0.1 * (idx % 2 === 0 ? 1 : -1));
+        const px = cx + Math.cos(a) * r;
+        const py = cy + Math.sin(a) * r;
+        if (p === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = `${top}33`;
+      ctx.stroke();
     });
+  } else if (style === 'stardust') {
+    const dust = ensureStardust(w, h);
+    const bass = getBassRms();
+    dust.stars.forEach(s => {
+      s.x += s.vx * (1 + bass * 3);
+      s.y += s.vy * (1 + bass * 3);
+      if (s.x < 0) s.x = w; if (s.x > w) s.x = 0;
+      if (s.y < 0) s.y = h; if (s.y > h) s.y = 0;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r * (1 + bass * 2), 0, Math.PI * 2);
+      ctx.fillStyle = s.r > 2 ? top : bottom;
+      ctx.fill();
+    });
+  } else if (style === 'lissajous') {
+    const data = waveformData('time');
+    const cx = w / 2, cy = h / 2;
+    const rx = w * 0.3, ry = h * 0.25;
+    ctx.beginPath();
+    ctx.strokeStyle = top;
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = top;
+    ctx.shadowBlur = 8;
+    for (let i = 0; i < data.length; i++) {
+      const v = (data[i] / 128 - 1);
+      const angle = (i / data.length) * Math.PI * 2;
+      const x = cx + Math.sin(angle * 2 + t * 0.4) * (rx + v * 50);
+      const y = cy + Math.cos(angle * 3 + t * 0.3) * (ry + v * 50);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
   }
 }
 
-function drawWatermark(ctx, w, h, mode) {
-  if (mode === 'none') return;
+// Center Vinyl Disc
+function drawVinylDisc(ctx, w, h, t, bass) {
+  if (!document.getElementById('showVinylCheck').checked) return;
+  const style = document.getElementById('vidStyle').value;
+  if (style !== 'radial' && style !== 'pulse' && style !== 'wave') return;
+
+  const cx = w / 2, cy = h / 2;
+  const r = Math.min(w, h) * (0.18 + bass * 0.03);
+
   ctx.save();
-  ctx.globalAlpha = 0.55;
-  ctx.fillStyle = '#D4B97A';
-  ctx.font = '600 ' + Math.round(w * 0.022) + 'px Montserrat, sans-serif';
-  ctx.textAlign = 'right';
-  const label = mode === 'wordmark' ? 'TRANQUILICY' : '◎';
-  ctx.fillText(label, w - w * 0.05, h - h * 0.045);
+  ctx.translate(cx, cy);
+  ctx.rotate(t * 0.4);
+
+  // Outer black vinyl
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#11100E';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(193,166,115,0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Grooves
+  [0.85, 0.72, 0.6].forEach(f => {
+    ctx.beginPath();
+    ctx.arc(0, 0, r * f, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  });
+
+  // Center Cover Art or Gold Emblem
+  const centerR = r * 0.46;
+  ctx.beginPath();
+  ctx.arc(0, 0, centerR, 0, Math.PI * 2);
+  ctx.clip();
+
+  if (coverImage) {
+    ctx.drawImage(coverImage, -centerR, -centerR, centerR * 2, centerR * 2);
+  } else {
+    ctx.fillStyle = '#C1A673';
+    ctx.fillRect(-centerR, -centerR, centerR * 2, centerR * 2);
+    ctx.fillStyle = '#090807';
+    ctx.beginPath();
+    ctx.arc(0, 0, centerR * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
-function drawTitleText(ctx, w, h) {
+function drawOverlays(ctx, w, h) {
+  const font = document.getElementById('vidFont').value;
   const title = document.getElementById('trackTitle').value.trim() || 'Untitled Chillout Track';
-  ctx.save();
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#F2EFE9';
-  ctx.font = 'italic 400 ' + Math.round(w * 0.055) + 'px "Cormorant Garamond", Georgia, serif';
-  ctx.globalAlpha = 0.92;
-  ctx.fillText(title, w / 2, h * 0.13);
-  ctx.restore();
+  const artist = document.getElementById('trackArtist').value.trim() || 'Tranquil Soul Music';
+  const p = document.getElementById('player');
+
+  // Title
+  if (document.getElementById('showTitleCheck').checked) {
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#F2EFE9';
+    ctx.font = `italic 400 ${Math.round(w * 0.048)}px "${font}", serif`;
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 8;
+    ctx.fillText(title, w / 2, h * 0.12);
+    ctx.restore();
+  }
+
+  // Artist
+  if (document.getElementById('showArtistCheck').checked) {
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#D4B97A';
+    ctx.font = `500 ${Math.round(w * 0.02)}px Montserrat, sans-serif`;
+    ctx.letterSpacing = '0.12em';
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 6;
+    ctx.fillText(artist.toUpperCase(), w / 2, h * 0.175);
+    ctx.restore();
+  }
+
+  // Timecode
+  if (document.getElementById('showTimecodeCheck').checked) {
+    const cur = p && p.currentTime ? p.currentTime : 0;
+    const dur = p && isFinite(p.duration) ? p.duration : 20;
+    const fmtTime = s => {
+      const m = Math.floor(s / 60);
+      const sec = Math.floor(s % 60);
+      return `${m < 10 ? '0' : ''}${m}:${sec < 10 ? '0' : ''}${sec}`;
+    };
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(242,239,233,0.7)';
+    ctx.font = `400 ${Math.round(w * 0.02)}px Montserrat, sans-serif`;
+    ctx.fillText(`${fmtTime(cur)} / ${fmtTime(dur)}`, w * 0.05, h - h * 0.045);
+    ctx.restore();
+  }
+
+  // Bottom Progress Scrubber
+  if (document.getElementById('showProgressCheck').checked) {
+    const cur = p && p.currentTime ? p.currentTime : 0;
+    const dur = p && isFinite(p.duration) ? p.duration : 20;
+    const frac = dur > 0 ? Math.min(1, cur / dur) : 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fillRect(0, h - 4, w, 4);
+    ctx.fillStyle = '#C1A673';
+    ctx.fillRect(0, h - 4, w * frac, 4);
+  }
+
+  // Watermark
+  const wmMode = document.getElementById('vidWatermark').value;
+  if (wmMode !== 'none') {
+    const pos = document.getElementById('watermarkPos').value;
+    let label = 'TRANQUILICY';
+    if (wmMode === 'ring') label = '◎';
+    if (wmMode === 'custom') label = document.getElementById('customWatermarkText').value.trim() || 'TRANQUILICY';
+
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = '#D4B97A';
+    ctx.font = `600 ${Math.round(w * 0.02)}px Montserrat, sans-serif`;
+    let wx, wy, align;
+    switch (pos) {
+      case 'tl': wx = w * 0.05; wy = h * 0.07; align = 'left'; break;
+      case 'tr': wx = w * 0.95; wy = h * 0.07; align = 'right'; break;
+      case 'bl': wx = w * 0.05; wy = h - h * 0.045; align = 'left'; break;
+      case 'bc': wx = w * 0.5; wy = h - h * 0.045; align = 'center'; break;
+      default:   wx = w * 0.95; wy = h - h * 0.045; align = 'right'; break;
+    }
+    ctx.textAlign = align;
+    ctx.fillText(label, wx, wy);
+    ctx.restore();
+  }
 }
 
 function drawExportFrame(t) {
   const canvas = document.getElementById('exportCanvas');
   const ctx = canvas.getContext('2d');
   const w = canvas.width, h = canvas.height;
-  drawBackdrop(ctx, w, h, t, document.getElementById('vidBackdrop').value);
-  drawTitleText(ctx, w, h);
-  drawWaveform(ctx, w, h, document.getElementById('vidStyle').value, document.getElementById('vidPalette').value);
-  drawWatermark(ctx, w, h, document.getElementById('vidWatermark').value);
+  const bass = getBassRms();
+  const pulseFactor = (parseFloat(document.getElementById('beatPulse').value) / 100) * 0.08;
+  const scale = 1.0 + (bass * pulseFactor);
+
+  ctx.save();
+  ctx.translate(w / 2, h / 2);
+  ctx.scale(scale, scale);
+  ctx.translate(-w / 2, -h / 2);
+
+  drawBackdrop(ctx, w, h, t, document.getElementById('vidBackdrop').value, bass);
+  drawWaveform(ctx, w, h, document.getElementById('vidStyle').value, document.getElementById('vidPalette').value, t);
+  drawVinylDisc(ctx, w, h, t, bass);
+  ctx.restore();
+
+  drawOverlays(ctx, w, h);
 }
 
-// Every control that affects the frame refreshes the preview immediately.
-// (Resizing the canvas clears it, so changing aspect ratio used to leave a blank
-// black box until you hit Render.)
-['vidStyle', 'vidPalette', 'vidBackdrop', 'vidAspect', 'vidWatermark'].forEach(id => {
+// Preview Synchronization
+['vidStyle', 'vidPalette', 'vidBackdrop', 'vidAspect', 'vidWatermark', 'watermarkPos', 'vidFont'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => {
+    if (id === 'vidWatermark') {
+      document.getElementById('customWatermarkField').style.display = document.getElementById('vidWatermark').value === 'custom' ? 'block' : 'none';
+    }
+    refreshPreview();
+  });
+});
+['showTitleCheck', 'showArtistCheck', 'showTimecodeCheck', 'showProgressCheck', 'showVinylCheck'].forEach(id => {
   document.getElementById(id).addEventListener('change', refreshPreview);
 });
-document.getElementById('trackTitle').addEventListener('input', () => {
-  refreshPreview();
-  updateDownloadNames();
-});
+document.getElementById('trackTitle').addEventListener('input', () => { refreshPreview(); updateDownloadNames(); });
+document.getElementById('trackArtist').addEventListener('input', refreshPreview);
 document.getElementById('namePattern').addEventListener('change', updateDownloadNames);
 
 function refreshPreview() {
@@ -1771,6 +2579,7 @@ function setVidStatus(msg) {
   status.textContent = msg || '';
 }
 
+// Render Video with Web Audio and Stream
 async function renderVideo() {
   const player = document.getElementById('player');
   const btn = document.getElementById('renderVidBtn');
@@ -1782,13 +2591,12 @@ async function renderVideo() {
   }
 
   btn.disabled = true;
-  setChip('downloadVideoBtn', null);  // the old render no longer matches these settings
-  setVidStatus('Rendering — plays the track once...');
+  setChip('downloadVideoBtn', null);
+  setVidStatus('Rendering — playing track once...');
 
   try {
     await renderVideoInner(player, btn);
   } catch (e) {
-    // without this the button stays disabled forever on any failure
     setVidStatus('Render failed: ' + e.message);
     btn.disabled = false;
   }
@@ -1799,10 +2607,14 @@ async function renderVideoInner(player, btn) {
   sizeExportCanvas();
   const canvas = document.getElementById('exportCanvas');
 
-  const canvasStream = canvas.captureStream(30);
+  const q = document.getElementById('vidQuality').value;
+  const fps = q === 'ultra' ? 60 : 30;
+  const bitrate = q === 'ultra' ? 8_000_000 : (q === 'fast' ? 2_500_000 : 5_000_000);
+
+  const canvasStream = canvas.captureStream(fps);
   const combined = new MediaStream([...canvasStream.getVideoTracks(), ...mediaStreamDest.stream.getAudioTracks()]);
   const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm';
-  const recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 4_000_000 });
+  const recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: bitrate });
   const chunks = [];
   recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
 
@@ -1812,6 +2624,7 @@ async function renderVideoInner(player, btn) {
     drawExportFrame((performance.now() - startT) / 1000);
     rafId = requestAnimationFrame(loop);
   }
+
   function stopEverything() {
     if (stopped) return;
     stopped = true;
@@ -1819,20 +2632,16 @@ async function renderVideoInner(player, btn) {
     if (recorder.state !== 'inactive') recorder.stop();
     player.pause();
     player.removeEventListener('ended', stopEverything);
-    // each render calls captureStream() afresh; without stopping the old tracks
-    // every render leaves a live video track attached to the canvas
     canvasStream.getTracks().forEach(t => t.stop());
   }
-  // stop on real playback end as well as the timer, so the video length follows
-  // the audio rather than a wall-clock estimate that drifts if playback stalls
+
   player.addEventListener('ended', stopEverything);
 
   recorder.onstop = () => {
     if (lastVideoUrl) URL.revokeObjectURL(lastVideoUrl);
     const blob = new Blob(chunks, { type: 'video/webm' });
     lastVideoUrl = URL.createObjectURL(blob);
-    setChip('downloadVideoBtn', lastVideoUrl, buildFilename('webm'),
-            `Video · ${humanSize(blob.size)}`);
+    setChip('downloadVideoBtn', lastVideoUrl, buildFilename('webm'), `Video · ${humanSize(blob.size)}`);
     setVidStatus('Ready in the bar below');
     btn.disabled = false;
     flow.rendered = true;
@@ -1841,7 +2650,9 @@ async function renderVideoInner(player, btn) {
 
   const lengthMode = document.getElementById('vidLength').value;
   const fullDuration = isFinite(player.duration) && player.duration > 0 ? player.duration : 20;
-  const targetSec = lengthMode === 'loop15' ? Math.min(15, fullDuration) : fullDuration;
+  let targetSec = fullDuration;
+  if (lengthMode === 'loop15') targetSec = Math.min(15, fullDuration);
+  if (lengthMode === 'loop30') targetSec = Math.min(30, fullDuration);
 
   player.currentTime = 0;
   recorder.start();
@@ -1850,9 +2661,9 @@ async function renderVideoInner(player, btn) {
     await player.play();
   } catch (e) {
     stopEverything();
-    throw new Error('could not play the track back for recording');
+    throw new Error('Could not start playback for recording');
   }
-  setTimeout(stopEverything, targetSec * 1000 + 250);
+  setTimeout(stopEverything, targetSec * 1000 + 300);
 }
 
 function saveStillFrame() {

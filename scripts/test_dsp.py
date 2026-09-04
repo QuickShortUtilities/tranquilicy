@@ -40,6 +40,28 @@ def widen_stereo(audio, file_sr, width):
     return np.stack([mono + side, mono - side], axis=1).astype(np.float32)
 
 
+def apply_warmth(audio, warmth):
+    if warmth <= 0.0:
+        return audio
+    drive = 1.0 + warmth * 1.5
+    driven = audio * drive
+    sat = np.clip(driven, -1.5, 1.5)
+    sat = sat - (sat ** 3) / 6.0
+    return (sat / drive).astype(np.float32)
+
+
+def apply_air(audio, air):
+    if air <= 0.0:
+        return audio
+    diff = np.zeros_like(audio)
+    if audio.ndim == 1:
+        diff[1:] = audio[1:] - audio[:-1]
+    else:
+        diff[1:, :] = audio[1:, :] - audio[:-1, :]
+    out = audio + (air * 0.35) * diff
+    return np.clip(out, -0.99, 0.99).astype(np.float32)
+
+
 def apply_fades(audio, file_sr, fade_in, fade_out):
     n = len(audio)
     env = np.ones(n, dtype=np.float32)
@@ -106,6 +128,19 @@ check("widen: mono sum returns the original exactly", np.allclose(mono_sum, x, a
 check("widen: channels actually differ", float(np.mean(np.abs(st[:, 0] - st[:, 1]))) > 1e-3)
 zero = widen_stereo(x, SR, 0.0)
 check("widen: width=0 leaves channels identical", np.allclose(zero[:, 0], zero[:, 1]))
+
+# --- tape warmth and air lift ---
+w_zero = apply_warmth(x, 0.0)
+check("warmth: 0.0 leaves audio untouched", np.allclose(w_zero, x))
+w_sat = apply_warmth(x, 0.8)
+check("warmth: saturation alters harmonics without exceeding bounds", np.max(np.abs(w_sat)) <= 1.0)
+check("warmth: actually modifies the signal", float(np.mean(np.abs(w_sat - x))) > 1e-4)
+
+a_zero = apply_air(x, 0.0)
+check("air: 0.0 leaves audio untouched", np.allclose(a_zero, x))
+a_lift = apply_air(x, 0.8)
+check("air: adds high frequency energy without blowing up", np.max(np.abs(a_lift)) <= 1.0)
+check("air: actually modifies the signal", float(np.mean(np.abs(a_lift - x))) > 1e-4)
 
 # --- fades ---
 f = apply_fades(x, SR, 2.0, 3.0)
