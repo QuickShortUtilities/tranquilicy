@@ -281,48 +281,376 @@
   @keyframes unlockSweep { to { transform: translateX(100%); } }
   .card-actions { margin-top: auto; padding-top: 14px; }
   
-  /* Output Bar */
-  .outbar { margin-top: 24px; display: flex; align-items: center; gap: 26px; padding: 20px 24px; }
-  .outbar-main { flex: 1 1 auto; min-width: 0; }
-  .outbar-line { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--text-2); letter-spacing: .02em; margin-bottom: 12px; }
-  #statusLabel { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #statusPct { color: var(--gold-text); font-family: var(--display); font-style: italic; font-size: 15px; flex: none; }
-  @media (max-width: 960px) { .outbar { flex-direction: column; align-items: stretch; gap: 18px; } }
-  
-  .eq { display: flex; align-items: flex-end; gap: 3px; height: 18px; flex: none; }
-  .eq i { width: 2px; height: 30%; border-radius: 2px; background: var(--text-3); animation: eqIdle 3.2s var(--ease) infinite; }
-  .eq i:nth-child(2) { animation-delay: .35s; }
-  .eq i:nth-child(3) { animation-delay: .7s; }
-  .eq i:nth-child(4) { animation-delay: 1.05s; }
-  .eq i:nth-child(5) { animation-delay: 1.4s; }
-  @keyframes eqIdle { 0%, 100% { height: 22%; } 50% { height: 72%; } }
-  .outbar.busy .eq i { background: var(--gold); animation-duration: .95s; }
-  
-  #playerWrap { opacity: 0; transition: opacity .55s var(--ease); margin-top: 10px; }
-  #playerWrap.ready { opacity: 1; }
-  
-  /* Player Utility Row */
-  .player-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
-  .speed-group { display: flex; gap: 4px; align-items: center; }
-  .speed-btn {
-    background: var(--bg-3); border: 1px solid var(--line); border-radius: 4px;
-    padding: 3px 8px; font-size: 10px; color: var(--text-2); cursor: pointer;
+  /* ========================================================================= */
+  /* GRAND MASTER AUDIO DECK & QUEUE RADAR (100x Luxury Edition)               */
+  /* ========================================================================= */
+  .master-deck {
+    margin-top: 32px;
+    background: linear-gradient(160deg, rgba(22, 20, 18, 0.95) 0%, rgba(14, 13, 11, 0.98) 100%);
+    border: 1px solid rgba(212, 185, 122, 0.28);
+    border-radius: 20px;
+    padding: 24px 28px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.7), 0 0 35px rgba(212,185,122,0.08), inset 0 1px 0 rgba(255,255,255,0.08);
+    position: relative;
+    overflow: hidden;
+    transition: border-color .3s var(--ease), box-shadow .3s var(--ease);
   }
-  .speed-btn.active { border-color: var(--gold); color: var(--gold-text); background: var(--bg-4); }
-  
-  .chips { display: flex; gap: 10px; flex: none; flex-wrap: wrap; }
-  .chip {
-    display: inline-flex; align-items: center; gap: 9px; padding: 11px 16px;
-    border: 1px solid var(--line-hi); border-radius: 999px; background: transparent;
-    color: var(--text-2); font-family: var(--ui); font-weight: 500; font-size: 11px;
-    text-transform: uppercase; letter-spacing: .12em; text-decoration: none; cursor: pointer;
-    white-space: nowrap;
-    transition: background .2s var(--ease), border-color .2s var(--ease), color .2s var(--ease), opacity .4s var(--ease);
+  .master-deck.is-playing {
+    border-color: rgba(212, 185, 122, 0.45);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.75), 0 0 45px rgba(212,185,122,0.14), inset 0 1px 0 rgba(255,255,255,0.1);
   }
-  .chip:hover { background: rgba(193,166,115,.06); border-color: var(--gold-glow); color: var(--gold-text); }
-  .chip .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); flex: none; transition: opacity .4s var(--ease); }
-  .chip.empty { opacity: .26; pointer-events: none; }
-  .chip.empty .dot { opacity: 0; }
+  .master-deck.busy { border-color: rgba(212, 185, 122, 0.4); }
+
+  /* Top Deck Header */
+  .deck-top-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 20px;
+    padding-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-wrap: wrap;
+  }
+  .deck-identity { display: flex; align-items: center; gap: 16px; min-width: 0; }
+  .master-eq { display: flex; align-items: flex-end; gap: 3px; height: 22px; width: 28px; flex: none; }
+  .master-eq span {
+    flex: 1; height: 25%; background: var(--text-3); border-radius: 2px;
+    transition: height .15s ease, background .3s ease;
+  }
+  .master-deck.is-playing .master-eq span {
+    background: linear-gradient(180deg, #FFF8E7, var(--gold));
+    animation: eqBounce .8s ease-in-out infinite alternate;
+  }
+  .master-deck.is-playing .master-eq span:nth-child(1) { animation-delay: 0.1s; }
+  .master-deck.is-playing .master-eq span:nth-child(2) { animation-delay: 0.35s; }
+  .master-deck.is-playing .master-eq span:nth-child(3) { animation-delay: 0.2s; }
+  .master-deck.is-playing .master-eq span:nth-child(4) { animation-delay: 0.5s; }
+  .master-deck.is-playing .master-eq span:nth-child(5) { animation-delay: 0.15s; }
+  .master-deck.is-playing .master-eq span:nth-child(6) { animation-delay: 0.4s; }
+  .master-deck.is-playing .master-eq span:nth-child(7) { animation-delay: 0.25s; }
+
+  @keyframes eqBounce {
+    0% { height: 20%; }
+    50% { height: 85%; }
+    100% { height: 40%; }
+  }
+
+  .deck-title-wrap { min-width: 0; }
+  .deck-kicker {
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .16em;
+    color: var(--gold-text); display: block; margin-bottom: 2px;
+  }
+  .deck-title {
+    font-family: var(--display); font-size: 20px; font-weight: 500; color: #FFF8E7;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 380px;
+  }
+  #statusPct {
+    font-family: var(--display); font-size: 16px; color: var(--gold-text);
+    font-style: italic; margin-left: 8px;
+  }
+
+  .deck-badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .badge-chip {
+    font-size: 10px; font-family: var(--ui); font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; padding: 4px 10px; border-radius: 999px;
+    background: rgba(255,255,255,0.05); color: var(--text-2); border: 1px solid rgba(255,255,255,0.08);
+  }
+  .badge-chip.gold {
+    background: rgba(212, 185, 122, 0.12); color: var(--gold-text);
+    border-color: rgba(212, 185, 122, 0.28);
+  }
+
+  /* GPU Queue Radar Banner */
+  .queue-radar {
+    margin-top: 18px; padding: 18px 22px; border-radius: 14px;
+    background: radial-gradient(circle at 15% 50%, rgba(212,185,122,0.18) 0%, rgba(24,20,16,0.85) 75%);
+    border: 1px solid rgba(212,185,122,0.4);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5), inset 0 0 20px rgba(212,185,122,0.08);
+    display: flex; align-items: center; gap: 18px; position: relative; overflow: hidden;
+  }
+  .radar-scan-line {
+    position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(212,185,122,0.22), transparent);
+    animation: radarScan 2.4s linear infinite; pointer-events: none;
+  }
+  @keyframes radarScan { to { left: 150%; } }
+  .radar-icon-wrap {
+    width: 44px; height: 44px; border-radius: 50%; background: rgba(212,185,122,0.15);
+    border: 1.5px solid var(--gold); display: grid; place-items: center; flex: none; position: relative;
+  }
+  .radar-pulse {
+    position: absolute; inset: -6px; border-radius: 50%; border: 1.5px solid rgba(212,185,122,0.4);
+    animation: radarPulseAnim 1.8s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+  }
+  @keyframes radarPulseAnim { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+  .radar-glyph { font-size: 18px; }
+  .radar-body { flex: 1 1 auto; min-width: 0; }
+  .radar-headline { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
+  .radar-title { font-size: 14px; color: #FFF8E7; font-weight: 500; }
+  .radar-title strong { color: var(--gold-text); font-weight: 700; }
+  .radar-timer {
+    font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px;
+    background: rgba(212,185,122,0.25); color: #FFF8E7; letter-spacing: .04em;
+  }
+  .radar-subtext { font-size: 12px; color: var(--text-2); margin: 0; line-height: 1.45; }
+  .radar-cancel-btn {
+    padding: 7px 14px; font-size: 11px; font-weight: 500; letter-spacing: .06em;
+    border-radius: 8px; border: 1px solid rgba(239,68,68,0.4); background: rgba(239,68,68,0.12);
+    color: #FCA5A5; cursor: pointer; transition: all .2s ease; flex: none;
+  }
+  .radar-cancel-btn:hover { background: rgba(239,68,68,0.25); border-color: #EF4444; color: #fff; }
+
+  /* Synthesis Progress Bar */
+  .synthesis-track-wrap {
+    margin-top: 14px; width: 100%;
+  }
+  #barOuter {
+    width: 100%; height: 5px; background: rgba(255,255,255,0.06);
+    border-radius: 999px; overflow: hidden; position: relative;
+  }
+  #barInner {
+    width: 0%; height: 100%;
+    background: linear-gradient(90deg, var(--gold-deep), #FFF8E7);
+    border-radius: 999px; transition: width .25s ease-out;
+    box-shadow: 0 0 12px rgba(212,185,122,0.6);
+  }
+
+  /* Master Audio Studio Body */
+  #playerWrap { margin-top: 20px; transition: opacity .4s ease; }
+  #playerWrap[hidden] { display: none; }
+
+  /* Interactive Waveform Stage */
+  .waveform-stage {
+    background: rgba(8, 7, 6, 0.85); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px; padding: 14px 18px; position: relative;
+    box-shadow: inset 0 2px 10px rgba(0,0,0,0.8);
+  }
+  .stage-header {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+    font-size: 12px; font-family: var(--ui);
+  }
+  .stage-time-readout {
+    font-family: monospace; font-size: 14px; font-weight: 500;
+    color: #FFF8E7; font-variant-numeric: tabular-nums;
+  }
+  .stage-time-readout .time-sep { opacity: 0.4; margin: 0 4px; }
+  .stage-time-readout .time-total { color: var(--text-3); font-size: 12px; }
+  .stage-loop-indicator {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px;
+    letter-spacing: .06em; color: var(--gold-text);
+    background: rgba(212,185,122,0.10); border: 1px solid rgba(212,185,122,0.22);
+    padding: 3px 10px; border-radius: 999px;
+  }
+  .stage-loop-indicator strong { color: #FFF8E7; }
+
+  .waveform-canvas-wrap {
+    position: relative; width: 100%; height: 90px;
+    background: radial-gradient(ellipse at 50% 50%, rgba(25,22,18,0.7) 0%, rgba(6,5,4,0.95) 100%);
+    border-radius: 8px; cursor: pointer; overflow: hidden; user-select: none;
+    touch-action: none;
+  }
+  #waveformCanvas { width: 100%; height: 100%; display: block; }
+  .waveform-playhead {
+    position: absolute; top: 0; bottom: 0; width: 2px; background: #FFF8E7;
+    pointer-events: none; transform: translateX(-50%); left: 0%;
+    transition: left .04s linear; z-index: 8;
+  }
+  .playhead-glow {
+    position: absolute; inset: -4px; background: rgba(255,248,231,0.35); filter: blur(4px);
+  }
+  .playhead-cap {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 8px; height: 8px; border-radius: 50%; background: var(--gold);
+    box-shadow: 0 0 8px var(--gold);
+  }
+  .waveform-hover-tip {
+    position: absolute; top: 6px; transform: translateX(-50%);
+    padding: 2px 7px; border-radius: 4px; background: rgba(18,16,14,0.92);
+    border: 1px solid var(--gold); font-size: 10px; font-family: monospace;
+    color: #FFF8E7; pointer-events: none; opacity: 0; transition: opacity .15s ease;
+    z-index: 12;
+  }
+  .waveform-canvas-wrap:hover .waveform-hover-tip { opacity: 1; }
+
+  /* Master Controls Strip */
+  .master-controls-strip {
+    display: flex; align-items: center; justify-content: space-between; gap: 24px;
+    margin-top: 18px; padding: 14px 18px; background: rgba(255,255,255,0.02);
+    border-radius: 14px; border: 1px solid rgba(255,255,255,0.05);
+    flex-wrap: wrap;
+  }
+  .playback-buttons-cluster {
+    display: flex; align-items: center; gap: 14px; flex: none;
+  }
+  .btn-ctrl-circle {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--bg-3); border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text); cursor: pointer; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; transition: all .15s ease;
+    position: relative;
+  }
+  .btn-ctrl-circle:hover {
+    border-color: var(--gold); background: var(--bg-4); color: var(--gold-text);
+    transform: scale(1.05);
+  }
+  .btn-subtext { font-size: 8px; font-weight: 700; line-height: 1; margin-top: -2px; }
+
+  /* Illuminated 60px Master Play Disc */
+  .master-play-disc {
+    width: 60px; height: 60px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #FFF8E7 0%, #D4B97A 45%, #9E7D3B 100%);
+    border: none; color: #0E0C0A; cursor: pointer; display: grid; place-items: center;
+    box-shadow: 0 6px 24px rgba(212,185,122,0.45), inset 0 1px 2px rgba(255,255,255,0.8);
+    position: relative; transition: all .2s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+    flex: none;
+  }
+  .master-play-disc:hover {
+    transform: scale(1.08); box-shadow: 0 8px 32px rgba(212,185,122,0.7), 0 0 20px rgba(255,248,231,0.5);
+  }
+  .master-play-disc:active { transform: scale(0.96); }
+  .play-halo {
+    position: absolute; inset: -4px; border-radius: 50%;
+    border: 1.5px solid rgba(212,185,122,0.4); pointer-events: none;
+    animation: playHaloPulse 2.8s ease infinite;
+  }
+  @keyframes playHaloPulse {
+    0%, 100% { transform: scale(1); opacity: 0.3; }
+    50% { transform: scale(1.15); opacity: 0.75; }
+  }
+
+  .deck-playback-meta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .speed-toggle-group {
+    display: flex; align-items: center; gap: 4px; background: rgba(0,0,0,0.3);
+    padding: 3px 6px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);
+  }
+  .ctrl-sublabel {
+    font-size: 9px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--text-3); margin-right: 4px;
+  }
+  .speed-pill {
+    padding: 3px 8px; font-size: 11px; border-radius: 5px; border: 1px solid transparent;
+    background: transparent; color: var(--text-2); cursor: pointer; transition: all .15s ease;
+  }
+  .speed-pill:hover { color: var(--text); }
+  .speed-pill.active {
+    background: rgba(212,185,122,0.18); border-color: var(--gold); color: var(--gold-text); font-weight: 600;
+  }
+  .loop-toggle-pill {
+    display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px;
+    font-size: 11px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(0,0,0,0.3); color: var(--text-2); cursor: pointer; transition: all .2s ease;
+  }
+  .loop-toggle-pill:hover { border-color: var(--gold-glow); color: var(--text); }
+  .loop-toggle-pill.active {
+    background: rgba(212,185,122,0.15); border-color: var(--gold); color: var(--gold-text);
+  }
+  .loop-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); transition: background .2s ease;
+  }
+  .loop-toggle-pill.active .loop-dot {
+    background: var(--gold); box-shadow: 0 0 6px var(--gold);
+  }
+
+  /* Volume & Stereo VU Meter */
+  .volume-vu-cluster {
+    display: flex; align-items: center; gap: 10px; margin-left: auto;
+  }
+  .btn-mute {
+    background: transparent; border: none; color: var(--text-2); cursor: pointer;
+    display: grid; place-items: center; padding: 4px; border-radius: 6px;
+    transition: color .15s ease;
+  }
+  .btn-mute:hover { color: var(--gold-text); }
+  .vol-slider-wrap { width: 85px; display: flex; align-items: center; }
+  .vol-slider {
+    width: 100%; accent-color: var(--gold); cursor: pointer; height: 4px;
+  }
+  .stereo-vu-meter {
+    display: flex; gap: 4px; background: rgba(0,0,0,0.5); padding: 4px 6px;
+    border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);
+  }
+  .vu-channel { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .vu-label { font-size: 7.5px; font-weight: 700; color: var(--text-3); line-height: 1; }
+  .vu-leds { display: flex; gap: 2px; }
+  .vu-leds .led {
+    width: 3px; height: 12px; border-radius: 1px; background: rgba(255,255,255,0.08);
+    transition: background .08s ease;
+  }
+  .vu-leds .led.lit-green { background: #10B981; box-shadow: 0 0 4px #10B981; }
+  .vu-leds .led.lit-amber { background: #F59E0B; box-shadow: 0 0 4px #F59E0B; }
+  .vu-leds .led.lit-red { background: #EF4444; box-shadow: 0 0 5px #EF4444; }
+
+  /* Quick Ambient Soundscape Blend Shelf */
+  .quick-blend-shelf {
+    display: flex; align-items: center; gap: 18px; margin-top: 14px;
+    padding: 10px 16px; background: rgba(0,0,0,0.25); border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.04); flex-wrap: wrap;
+  }
+  .blend-shelf-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--gold-text); flex: none;
+  }
+  .blend-item {
+    display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-2);
+    flex: 1 1 140px; min-width: 120px;
+  }
+  .blend-icon { font-size: 13px; }
+  .blend-name { min-width: 38px; }
+  .blend-fader { flex: 1; accent-color: var(--gold); cursor: pointer; height: 4px; }
+  .blend-val { font-size: 10.5px; font-family: monospace; color: var(--text); min-width: 28px; text-align: right; }
+
+  /* Luxury Hero Export Action Cards Grid */
+  .export-cards-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 18px;
+  }
+  @media (max-width: 1024px) { .export-cards-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 600px) { .export-cards-grid { grid-template-columns: 1fr; } }
+  .export-card {
+    background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px; padding: 14px 16px; display: flex; align-items: center;
+    gap: 12px; text-decoration: none; cursor: pointer; transition: all .2s var(--ease);
+    position: relative; overflow: hidden;
+  }
+  .export-card:hover {
+    background: rgba(255,255,255,0.05); border-color: rgba(212,185,122,0.4);
+    transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .export-card.primary {
+    background: linear-gradient(135deg, rgba(212,185,122,0.14) 0%, rgba(20,18,15,0.9) 100%);
+    border-color: rgba(212,185,122,0.45);
+  }
+  .export-card.primary:hover {
+    border-color: var(--gold); box-shadow: 0 8px 28px rgba(212,185,122,0.25);
+  }
+  .card-icon-halo {
+    width: 36px; height: 36px; border-radius: 9px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+    display: grid; place-items: center; font-size: 16px; flex: none;
+  }
+  .export-card.primary .card-icon-halo {
+    background: rgba(212,185,122,0.2); border-color: var(--gold); color: #FFF8E7;
+  }
+  .card-info { flex: 1 1 auto; min-width: 0; }
+  .card-headline {
+    display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: #FFF8E7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .card-subline {
+    display: block; font-size: 10px; color: var(--text-3); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; margin-top: 1px;
+  }
+  .card-pill {
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06);
+    color: var(--text-2); flex: none;
+  }
+  .export-card.primary .card-pill {
+    background: rgba(212,185,122,0.25); color: var(--gold-text);
+  }
+  .export-card.empty {
+    opacity: 0.35; pointer-events: none;
+  }
+  .deck-error {
+    margin-top: 12px; padding: 12px 16px; border-radius: 10px;
+    background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35);
+    color: #FCA5A5; font-size: 12px; line-height: 1.5;
+  }
   
   /* Artwork Drop Area */
   .art-drop {
@@ -1053,52 +1381,223 @@
     <div class="take-tray" id="takeTray"></div>
   </div>
 
-  <!-- OUTPUT CONTROL & ARTIFACT BAR -->
-  <div class="card outbar" id="outbar">
-    <div class="outbar-main">
-      <div class="outbar-line">
-        <span class="eq"><i></i><i></i><i></i><i></i><i></i></span>
-        <span id="statusLabel">No track yet — hit Generate</span>
-        <button type="button" class="link-btn" id="cancelBtn" style="display:none" onclick="cancelGeneration()">Cancel</button>
+  <!-- ========================================================================= -->
+  <!-- GRAND MASTER AUDIO DECK & QUEUE RADAR                                     -->
+  <!-- ========================================================================= -->
+  <div class="master-deck" id="outbar">
+    <!-- Top Deck Bar: Status, Brand Equalizer, Title & Badges -->
+    <div class="deck-top-bar">
+      <div class="deck-identity">
+        <div class="master-eq" id="masterEqBars">
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="deck-title-wrap">
+          <span class="deck-kicker">✦ TRANQUIL MASTER DECK</span>
+          <div class="deck-title" id="statusLabel">No track yet — hit Generate</div>
+        </div>
         <span id="statusPct"></span>
+        <button type="button" class="link-btn" id="cancelBtn" style="display:none" onclick="cancelGeneration()">Cancel</button>
       </div>
+      <div class="deck-badges">
+        <span class="badge-chip" id="masterLosslessBadge">24-BIT 48kHz LOSSLESS</span>
+        <span class="badge-chip gold" id="masterMoodBadge">Zen Harmonic · 432Hz</span>
+        <span class="badge-chip" id="masterGpuBadge">RTX 3090 CORE</span>
+      </div>
+    </div>
+
+    <!-- Active GPU Queue Radar Banner (Visible when queued) -->
+    <div class="queue-radar" id="queueRadar" style="display:none">
+      <div class="radar-scan-line"></div>
+      <div class="radar-icon-wrap">
+        <div class="radar-pulse"></div>
+        <span class="radar-glyph">⏳</span>
+      </div>
+      <div class="radar-body">
+        <div class="radar-headline">
+          <span class="radar-title">GPU Slot Reserved: <strong id="queuePosText">Position #1 in Queue</strong></span>
+          <span class="radar-timer" id="queueEstText">Est. Wait: ~9s</span>
+        </div>
+        <p class="radar-subtext">The local RTX 3090 is finishing an active track. Your generation will start automatically the millisecond the GPU is free. Please hold on!</p>
+      </div>
+      <button type="button" class="radar-cancel-btn" id="btnCancelQueue" onclick="cancelGeneration()">Cancel Request</button>
+    </div>
+
+    <!-- Synthesis Progress Bar (Visible while generating) -->
+    <div class="synthesis-track-wrap">
       <div id="barOuter"><div id="barInner"></div></div>
-      <div id="playerWrap" hidden>
-        <!-- Interactive Waveform Timeline with A/B Loop Markers -->
-        <div class="waveform-box" id="waveformBox">
-          <div class="waveform-meta">
-            <span class="waveform-time"><span id="waveCurrentTime">0:00</span> / <span id="waveTotalTime">0:20</span></span>
-            <span class="waveform-loop-tag" id="loopTag">A-B Loop: <span id="loopAVal">0.0s</span> - <span id="loopBVal">20.0s</span></span>
+    </div>
+
+    <!-- Master Audio Studio Body (Waveform, Player, Faders, Actions) -->
+    <div id="playerWrap" hidden>
+      <!-- Hero Interactive Waveform & Spectrum Stage -->
+      <div class="waveform-stage" id="waveformStage">
+        <div class="stage-header">
+          <div class="stage-time-readout">
+            <span class="time-current" id="waveCurrentTime">00:00</span>
+            <span class="time-sep">/</span>
+            <span class="time-total" id="waveTotalTime">00:20</span>
           </div>
-          <div class="waveform-track" id="waveformTrack" onclick="handleWaveformClick(event)">
-            <canvas id="waveformCanvas" width="800" height="60"></canvas>
-            <div class="waveform-playhead" id="waveformPlayhead"></div>
-            <div class="loop-bracket handle-a" id="loopHandleA" title="Loop Start (A)"><span>A</span></div>
-            <div class="loop-bracket handle-b" id="loopHandleB" title="Loop End (B)"><span>B</span></div>
-            <div class="loop-highlight" id="loopHighlight"></div>
+          <div class="stage-loop-indicator" id="loopTag">
+            <span>🔁 A-B LOOP: <strong id="loopAVal">0.0s</strong> – <strong id="loopBVal">20.0s</strong></span>
           </div>
         </div>
-        <audio id="player" controls></audio>
-        <div class="player-tools">
-          <div class="speed-group">
-            <span style="font-size:10px; text-transform:uppercase; color:var(--text-3); margin-right:4px;">Speed:</span>
-            <button type="button" class="speed-btn" id="speed075Btn" onclick="setSpeed(0.75)">0.75x</button>
-            <button type="button" class="speed-btn active" id="speed100Btn" onclick="setSpeed(1.0)">1.0x</button>
-            <button type="button" class="speed-btn" id="speed125Btn" onclick="setSpeed(1.25)">1.25x</button>
+
+        <div class="waveform-canvas-wrap" id="waveformTrack" onclick="handleWaveformClick(event)">
+          <canvas id="waveformCanvas" width="900" height="90"></canvas>
+          <div class="waveform-playhead" id="waveformPlayhead">
+            <div class="playhead-glow"></div>
+            <div class="playhead-cap"></div>
           </div>
-          <button type="button" class="speed-btn" id="playerLoopBtn" onclick="togglePlayerLoop()">🔁 Loop: Off</button>
+          <div class="loop-bracket handle-a" id="loopHandleA" title="Drag Loop Start (A)"><span>A</span></div>
+          <div class="loop-bracket handle-b" id="loopHandleB" title="Drag Loop End (B)"><span>B</span></div>
+          <div class="loop-highlight" id="loopHighlight"></div>
+          <div class="waveform-hover-tip" id="waveHoverTip">00:00</div>
         </div>
       </div>
-      <div id="errorText"></div>
+
+      <!-- Grand Master Controls Strip -->
+      <div class="master-controls-strip">
+        <div class="playback-buttons-cluster">
+          <button type="button" class="btn-ctrl-circle" id="btnSkipBack" title="Rewind 5s" onclick="skipAudio(-5)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.2 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
+            <span class="btn-subtext">5s</span>
+          </button>
+
+          <button type="button" class="master-play-disc" id="btnMasterPlay" title="Play / Pause Master" onclick="toggleMasterPlay()">
+            <div class="play-halo"></div>
+            <svg class="play-icon" id="masterPlayIcon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+            <svg class="pause-icon" id="masterPauseIcon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          </button>
+
+          <button type="button" class="btn-ctrl-circle" id="btnSkipFwd" title="Fast-Forward 5s" onclick="skipAudio(5)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M11.5 8c2.65 0 5.05.99 6.9 2.6L22 7v9h-9l3.62-3.62c-1.39-1.2-3.16-1.88-5.12-1.88-3.54 0-6.55 2.31-7.6 5.5l-2.37-.78C2.92 11.03 6.85 8 11.5 8z"/></svg>
+            <span class="btn-subtext">5s</span>
+          </button>
+        </div>
+
+        <div class="deck-playback-meta">
+          <div class="speed-toggle-group">
+            <span class="ctrl-sublabel">Speed</span>
+            <button type="button" class="speed-pill" id="speed075Btn" onclick="setSpeed(0.75)">0.75x</button>
+            <button type="button" class="speed-pill active" id="speed100Btn" onclick="setSpeed(1.0)">1.0x</button>
+            <button type="button" class="speed-pill" id="speed125Btn" onclick="setSpeed(1.25)">1.25x</button>
+            <button type="button" class="speed-pill" id="speed150Btn" onclick="setSpeed(1.5)">1.5x</button>
+          </div>
+
+          <button type="button" class="loop-toggle-pill" id="playerLoopBtn" onclick="togglePlayerLoop()">
+            <span class="loop-dot"></span>
+            <span id="loopToggleLabel">Seamless Loop: Off</span>
+          </button>
+        </div>
+
+        <!-- Volume & Live Stereo Peak Meter -->
+        <div class="volume-vu-cluster">
+          <button type="button" class="btn-mute" id="btnMasterMute" title="Toggle Mute" onclick="toggleMasterMute()">
+            <svg id="volHighIcon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+            <svg id="volMuteIcon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+          </button>
+          <div class="vol-slider-wrap">
+            <input type="range" class="vol-slider" id="masterVolume" min="0" max="100" value="100" oninput="setMasterVolume(this.value)">
+          </div>
+          <!-- Stereo LED dB Peak Meter -->
+          <div class="stereo-vu-meter" title="Master Stereo Peak Meter">
+            <div class="vu-channel">
+              <span class="vu-label">L</span>
+              <div class="vu-leds" id="vuMeterL">
+                <span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span>
+              </div>
+            </div>
+            <div class="vu-channel">
+              <span class="vu-label">R</span>
+              <div class="vu-leds" id="vuMeterR">
+                <span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Ambient Soundscape Blend Row (Direct Mix) -->
+      <div class="quick-blend-shelf">
+        <span class="blend-shelf-title">🌿 Ambient Textures:</span>
+        <div class="blend-item">
+          <span class="blend-icon">🌧️</span>
+          <span class="blend-name">Rain</span>
+          <input type="range" class="blend-fader" id="quickRain" min="0" max="100" value="0" oninput="syncMixerFader('rain', this.value)">
+          <span class="blend-val" id="quickRainVal">0%</span>
+        </div>
+        <div class="blend-item">
+          <span class="blend-icon">📻</span>
+          <span class="blend-name">Vinyl</span>
+          <input type="range" class="blend-fader" id="quickVinyl" min="0" max="100" value="0" oninput="syncMixerFader('vinyl', this.value)">
+          <span class="blend-val" id="quickVinylVal">0%</span>
+        </div>
+        <div class="blend-item">
+          <span class="blend-icon">🔮</span>
+          <span class="blend-name">Drone</span>
+          <input type="range" class="blend-fader" id="quickBinaural" min="0" max="100" value="0" oninput="syncMixerFader('binaural', this.value)">
+          <span class="blend-val" id="quickBinauralVal">0%</span>
+        </div>
+      </div>
+
+      <!-- Hero Luxury Download & Export Action Cards -->
+      <div class="export-cards-grid">
+        <a id="downloadBtn" class="export-card primary empty" download>
+          <div class="card-icon-halo">📥</div>
+          <div class="card-info">
+            <span class="card-headline">DOWNLOAD STUDIO WAV</span>
+            <span class="card-subline">Pristine 24-Bit 48kHz Master</span>
+          </div>
+          <span class="card-pill">Lossless</span>
+        </a>
+
+        <a id="masterChip" class="export-card empty" download>
+          <div class="card-icon-halo">🎚️</div>
+          <div class="card-info">
+            <span class="card-headline"><span id="masterChipLabel">ANALOG MASTER (DSP)</span></span>
+            <span class="card-subline">Warm Tape Saturation & Sheen</span>
+          </div>
+          <span class="card-pill">FLAC/WAV</span>
+        </a>
+
+        <a id="downloadVideoBtn" class="export-card empty" download>
+          <div class="card-icon-halo">🎬</div>
+          <div class="card-info">
+            <span class="card-headline"><span id="videoChipLabel">EXPORT VIDEO</span></span>
+            <span class="card-subline">Audio-Reactive Visualizer</span>
+          </div>
+          <span class="card-pill">Video</span>
+        </a>
+
+        <a id="stillChip" class="export-card empty" download>
+          <div class="card-icon-halo">🖼️</div>
+          <div class="card-info">
+            <span class="card-headline">4K COVER ARTWORK</span>
+            <span class="card-subline">High-Res Still Frame</span>
+          </div>
+          <span class="card-pill">Cover PNG</span>
+        </a>
+      </div>
     </div>
-    <div class="chips">
-      <a id="downloadBtn" class="chip empty" download><span class="dot"></span>WAV</a>
-      <a id="masterChip" class="chip empty" download><span class="dot"></span><span id="masterChipLabel">Master</span></a>
-      <a id="downloadVideoBtn" class="chip empty" download><span class="dot"></span><span id="videoChipLabel">Video</span></a>
-      <a id="stillChip" class="chip empty" download><span class="dot"></span>Still</a>
-    </div>
+
+    <!-- Hidden native audio element that powers the Web Audio graph -->
+    <audio id="player" preload="auto" style="display:none;"></audio>
+    <div id="errorText" class="deck-error" style="display:none"></div>
   </div>
 
+  <!-- STUDIO NOTICE MODAL FOR QUOTA / CAPACITY LIMITS -->
+  <div id="studioNoticeModal" class="modal-overlay" style="display:none">
+    <div class="modal-card">
+      <div class="card-head" style="margin-bottom:12px">
+        <span class="step-badge" id="noticeBadge">⚡</span>
+        <div class="card-title" id="noticeTitle">Studio Notice</div>
+      </div>
+      <div class="hint" id="noticeBody" style="margin-bottom:20px; font-size:13px; line-height:1.6; color:#FFF8E7;">
+        Notice description here.
+      </div>
+      <button type="button" class="btn-primary" style="margin:0; width:100%;" onclick="closeStudioNotice()">Understood</button>
+    </div>
+  </div>
   <div class="footer">
     Tranquil Soul Music <span class="sep">·</span> Tranquilicy Studio <span class="sep">·</span> v1.7.0
   </div>
@@ -1824,25 +2323,39 @@ async function generate() {
     const { job_id } = data;
     currentJobId = job_id;
 
+    const queueRadar = document.getElementById('queueRadar');
+    const queuePosText = document.getElementById('queuePosText');
+    const queueEstText = document.getElementById('queueEstText');
+
     while (true) {
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 380));
       const sRes = await fetch(getApiUrl('/status/' + job_id));
       if (!sRes.ok) throw new Error('Status check failed: ' + sRes.status);
       const s = await sRes.json();
       if (s.error) throw new Error(s.error);
-      if (s.in_queue) {
-        btn.innerHTML = `<span class="spin-ring"></span> In Queue (#${s.queue_position})...`;
-        statusLabel.textContent = `In Queue (Position #${s.queue_position}) · Est. wait ~${s.estimated_sec}s`;
-      } else if (typeof s.progress === 'number') {
-        const pct = Math.round(s.progress * 100);
-        barInner.style.width = pct + '%';
-        statusPct.textContent = pct + '%';
-        btn.innerHTML = `<span class="spin-ring"></span> Synthesizing (${pct}%)...`;
-        statusLabel.textContent = dur > 30 ? 'Generating (chained on RTX 3090)...' : 'Generating on RTX 3090...';
-      }
-      if (s.done) break;
-    }
 
+      if (s.in_queue) {
+        if (queueRadar) queueRadar.style.display = 'flex';
+        if (queuePosText) queuePosText.textContent = `Position #${s.queue_position} in Queue`;
+        if (queueEstText) queueEstText.textContent = `Est. Wait: ~${s.estimated_sec}s`;
+        btn.innerHTML = `<span class="spin-ring"></span> In Queue (#${s.queue_position})...`;
+        statusLabel.textContent = `Queued (#${s.queue_position}) · Est. wait ~${s.estimated_sec}s`;
+        barInner.style.width = '2%';
+      } else {
+        if (queueRadar) queueRadar.style.display = 'none';
+        if (typeof s.progress === 'number') {
+          const pct = Math.round(s.progress * 100);
+          barInner.style.width = Math.max(3, pct) + '%';
+          statusPct.textContent = pct + '%';
+          btn.innerHTML = `<span class="spin-ring"></span> Synthesizing (${pct}%)...`;
+          statusLabel.textContent = dur > 30 ? 'Generating (chained on RTX 3090)...' : 'Synthesizing on RTX 3090...';
+        }
+      }
+      if (s.done) {
+        if (queueRadar) queueRadar.style.display = 'none';
+        break;
+      }
+    }
     btn.innerHTML = '<span class="spin-ring"></span> Fetching Audio...';
     const audioRes = await fetch(getApiUrl('/result/' + job_id));
     if (!audioRes.ok) throw new Error('Failed to retrieve audio: ' + audioRes.status);
@@ -1887,21 +2400,32 @@ async function generate() {
     outbar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } catch (e) {
     console.error('[Tranquilicy] Generation error:', e);
-    const msg = e.message === 'Cancelled' ? 'Cancelled.' : 'Error: ' + e.message;
+    const msg = e.message === 'Cancelled' ? 'Cancelled.' : e.message;
     errorText.textContent = msg;
     errorText.style.display = 'block';
+    
+    // Check if error is quota or queue full
+    if (msg.includes('Daily generation limit') || msg.includes('Daily limit reached')) {
+      showStudioNotice('Daily Quota Limit (5/5)', `${msg}<br><br><span style="opacity:0.8;">Local admin and localhost creators have unlimited access. Visitors receive 5 complimentary master-quality generations every 24 hours.</span>`, '⚡');
+    } else if (msg.includes('peak capacity')) {
+      showStudioNotice('Studio At Peak Capacity', `${msg}<br><br><span style="opacity:0.8;">All GPU queue slots are currently reserved. Please wait 20–30 seconds and click Generate Track again.</span>`, '⏳');
+    } else if (msg.includes('already have a generation')) {
+      showStudioNotice('Generation In Progress', msg, '⚡');
+    }
+
     if (genNotice) {
       genNotice.style.display = 'block';
-      genNotice.innerHTML = `⚠️ <b>Generation issue:</b> ${msg}<br><span style="font-size:11px;opacity:0.8;">Check that scripts/09_api_server.py is running on your RTX 3090, or click the GPU badge in the top-right to inspect connection.</span>`;
+      genNotice.innerHTML = `⚠️ <b>Generation notice:</b> ${msg}`;
     }
     barInner.style.width = '0%';
     statusPct.textContent = '';
     btn.innerHTML = origBtnHtml;
+    const queueRadar = document.getElementById('queueRadar');
+    if (queueRadar) queueRadar.style.display = 'none';
+
     if (flow.generated && player.src) {
       playerWrap.hidden = false;
-      requestAnimationFrame(() => playerWrap.classList.add('ready'));
-      statusLabel.textContent = 'Previous track still loaded';
-      setChip('downloadBtn', lastAudioUrl, buildFilename('wav'));
+      statusLabel.textContent = 'Previous track loaded';
     } else {
       statusLabel.textContent = 'No track yet — hit Generate';
     }
@@ -2194,27 +2718,45 @@ function drawTimelineWaveform() {
   const canvas = document.getElementById('waveformCanvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const w = canvas.width = canvas.offsetWidth || 800;
-  const h = canvas.height = 60;
+  const w = canvas.width = canvas.offsetWidth || 900;
+  const h = canvas.height = 90;
 
   ctx.clearRect(0, 0, w, h);
   if (!waveformPeaks.length) return;
 
   const barW = w / waveformPeaks.length;
-  const grad = ctx.createLinearGradient(0, 0, 0, h);
-  grad.addColorStop(0, '#F2EFE9');
-  grad.addColorStop(0.5, '#D4B97A');
-  grad.addColorStop(1, '#A58B58');
+  const cy = h * 0.52;
 
-  ctx.fillStyle = grad;
+  // Draw ambient center reference line
+  ctx.strokeStyle = 'rgba(212,185,122,0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, cy);
+  ctx.lineTo(w, cy);
+  ctx.stroke();
+
+  // Draw Dual-Sided Illuminated Waveform
   waveformPeaks.forEach((p, i) => {
-    const barH = Math.max(3, p * (h - 8));
     const x = i * barW;
-    const y = (h - barH) / 2;
-    ctx.fillRect(x + 1, y, Math.max(1.5, barW - 1.5), barH);
+    const topH = Math.max(2, p * (h * 0.44));
+    const botH = topH * 0.45; // subtle lower mirror reflection
+
+    // Upper glowing wave
+    const gradTop = ctx.createLinearGradient(0, cy - topH, 0, cy);
+    gradTop.addColorStop(0, '#FFF8E7');
+    gradTop.addColorStop(0.45, '#D4B97A');
+    gradTop.addColorStop(1, '#9E7D3B');
+    ctx.fillStyle = gradTop;
+    ctx.fillRect(x + 1, cy - topH, Math.max(1.8, barW - 1.2), topH);
+
+    // Lower reflection
+    const gradBot = ctx.createLinearGradient(0, cy, 0, cy + botH);
+    gradBot.addColorStop(0, 'rgba(212,185,122,0.35)');
+    gradBot.addColorStop(1, 'rgba(158,125,59,0.05)');
+    ctx.fillStyle = gradBot;
+    ctx.fillRect(x + 1, cy, Math.max(1.8, barW - 1.2), botH);
   });
 }
-
 function handleWaveformClick(e) {
   const track = document.getElementById('waveformTrack');
   const player = document.getElementById('player');
@@ -2287,19 +2829,179 @@ function updateLoopUi() {
   }
 }
 
+
+// ---- Studio Notice Modal ----
+function showStudioNotice(title, message, badgeText = '⚠️') {
+  const modal = document.getElementById('studioNoticeModal');
+  const tEl = document.getElementById('noticeTitle');
+  const bEl = document.getElementById('noticeBody');
+  const badge = document.getElementById('noticeBadge');
+  if (modal && tEl && bEl) {
+    tEl.textContent = title;
+    bEl.innerHTML = message;
+    if (badge) badge.textContent = badgeText;
+    modal.style.display = 'flex';
+  }
+}
+function closeStudioNotice() {
+  const modal = document.getElementById('studioNoticeModal');
+  if (modal) modal.style.display = 'none';
+}
+
+// ---- Grand Master Deck Playback Controls ----
+async function toggleMasterPlay() {
+  const player = document.getElementById('player');
+  const playIcon = document.getElementById('masterPlayIcon');
+  const pauseIcon = document.getElementById('masterPauseIcon');
+  const deck = document.getElementById('outbar');
+  if (!player || !player.src) return;
+
+  await ensureAudioGraph();
+
+  if (player.paused) {
+    try {
+      await player.play();
+      if (playIcon) playIcon.style.display = 'none';
+      if (pauseIcon) pauseIcon.style.display = 'block';
+      if (deck) deck.classList.add('is-playing');
+    } catch(e) {
+      console.warn('[Tranquilicy] Play error:', e);
+    }
+  } else {
+    player.pause();
+    if (playIcon) playIcon.style.display = 'block';
+    if (pauseIcon) pauseIcon.style.display = 'none';
+    if (deck) deck.classList.remove('is-playing');
+  }
+}
+
+function skipAudio(deltaSec) {
+  const player = document.getElementById('player');
+  if (!player || !player.duration) return;
+  player.currentTime = Math.max(0, Math.min(player.duration, player.currentTime + deltaSec));
+}
+
+function setSpeed(spd) {
+  const player = document.getElementById('player');
+  if (player) player.playbackRate = spd;
+  [0.75, 1.0, 1.25, 1.5].forEach(s => {
+    const btn = document.getElementById('speed' + String(s).replace('.', '') + 'Btn');
+    if (btn) btn.classList.toggle('active', s === spd);
+  });
+}
+
+function togglePlayerLoop() {
+  const btn = document.getElementById('playerLoopBtn');
+  const label = document.getElementById('loopToggleLabel');
+  if (!btn) return;
+  const active = btn.classList.toggle('active');
+  if (label) label.textContent = active ? 'Seamless Loop: ON' : 'Seamless Loop: Off';
+}
+
+function setMasterVolume(val) {
+  const player = document.getElementById('player');
+  const volVal = parseFloat(val) / 100;
+  if (player) {
+    player.volume = volVal;
+    player.muted = (volVal === 0);
+  }
+  const highIcon = document.getElementById('volHighIcon');
+  const muteIcon = document.getElementById('volMuteIcon');
+  if (highIcon && muteIcon) {
+    highIcon.style.display = volVal === 0 ? 'none' : 'block';
+    muteIcon.style.display = volVal === 0 ? 'block' : 'none';
+  }
+}
+
+function toggleMasterMute() {
+  const player = document.getElementById('player');
+  if (!player) return;
+  player.muted = !player.muted;
+  const highIcon = document.getElementById('volHighIcon');
+  const muteIcon = document.getElementById('volMuteIcon');
+  if (highIcon && muteIcon) {
+    highIcon.style.display = player.muted ? 'none' : 'block';
+    muteIcon.style.display = player.muted ? 'block' : 'none';
+  }
+}
+
+function syncMixerFader(channel, val) {
+  const mainFader = document.getElementById('vol' + channel.charAt(0).toUpperCase() + channel.slice(1));
+  const quickValSpan = document.getElementById('quick' + channel.charAt(0).toUpperCase() + channel.slice(1) + 'Val');
+  if (mainFader) {
+    mainFader.value = val;
+    updateMixerVolumes();
+  }
+  if (quickValSpan) quickValSpan.textContent = val + '%';
+}
+
+// ---- Real-time Stereo VU Meter Engine ----
+let vuAnimId = null;
+function startVuMeter() {
+  if (vuAnimId) cancelAnimationFrame(vuAnimId);
+  const leftLeds = document.querySelectorAll('#vuMeterL .led');
+  const rightLeds = document.querySelectorAll('#vuMeterR .led');
+  const freqData = new Uint8Array(32);
+
+  function renderVu() {
+    if (analyserNode && player && !player.paused) {
+      analyserNode.getByteFrequencyData(freqData);
+      let sumL = 0, sumR = 0;
+      for (let i = 0; i < 16; i++) sumL += freqData[i];
+      for (let i = 16; i < 32; i++) sumR += freqData[i];
+      const normL = Math.min(7, Math.floor((sumL / (16 * 255)) * 10));
+      const normR = Math.min(7, Math.floor((sumR / (16 * 255)) * 10));
+
+      leftLeds.forEach((led, idx) => {
+        led.className = 'led' + (idx < normL ? (idx > 5 ? ' lit-red' : (idx > 4 ? ' lit-amber' : ' lit-green')) : '');
+      });
+      rightLeds.forEach((led, idx) => {
+        led.className = 'led' + (idx < normR ? (idx > 5 ? ' lit-red' : (idx > 4 ? ' lit-amber' : ' lit-green')) : '');
+      });
+    } else {
+      leftLeds.forEach(led => led.className = 'led');
+      rightLeds.forEach(led => led.className = 'led');
+    }
+    vuAnimId = requestAnimationFrame(renderVu);
+  }
+  renderVu();
+}
+
 function hookPlayerTimeUpdate() {
   const player = document.getElementById('player');
   const playhead = document.getElementById('waveformPlayhead');
   const timeDisplay = document.getElementById('waveCurrentTime');
   const totalDisplay = document.getElementById('waveTotalTime');
+  const playIcon = document.getElementById('masterPlayIcon');
+  const pauseIcon = document.getElementById('masterPauseIcon');
+  const deck = document.getElementById('outbar');
 
   if (!player) return;
 
   const fmtTime = s => {
     const m = Math.floor(s / 60);
     const sec = Math.floor(s % 60);
-    return `${m}:${sec < 10 ? '0' : ''}${sec}`;
+    return `${m < 10 ? '0' : ''}${m}:${sec < 10 ? '0' : ''}${sec}`;
   };
+
+  player.addEventListener('play', () => {
+    if (playIcon) playIcon.style.display = 'none';
+    if (pauseIcon) pauseIcon.style.display = 'block';
+    if (deck) deck.classList.add('is-playing');
+    startVuMeter();
+  });
+
+  player.addEventListener('pause', () => {
+    if (playIcon) playIcon.style.display = 'block';
+    if (pauseIcon) pauseIcon.style.display = 'none';
+    if (deck) deck.classList.remove('is-playing');
+  });
+
+  player.addEventListener('ended', () => {
+    if (playIcon) playIcon.style.display = 'block';
+    if (pauseIcon) pauseIcon.style.display = 'none';
+    if (deck) deck.classList.remove('is-playing');
+  });
 
   player.addEventListener('timeupdate', () => {
     if (player.duration) {
@@ -2315,8 +3017,21 @@ function hookPlayerTimeUpdate() {
       }
     }
   });
-}
 
+  // Hover scrub tooltip
+  const track = document.getElementById('waveformTrack');
+  const tip = document.getElementById('waveHoverTip');
+  if (track && tip) {
+    track.addEventListener('mousemove', e => {
+      if (!player.duration) return;
+      const rect = track.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      tip.style.left = (pct * 100) + '%';
+      tip.textContent = fmtTime(pct * player.duration);
+    });
+  }
+}
+hookPlayerTimeUpdate();
 // ---- Session Takes Library Tray ----
 const sessionTakes = [];
 
