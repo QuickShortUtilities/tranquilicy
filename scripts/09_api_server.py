@@ -7,7 +7,7 @@ driven by a StoppingCriteria hook that fires on every generation step.
 
 Usage:
     python 09_api_server.py
-Then open http://localhost:8000 in a browser.
+Then open local server in a browser.
 """
 import io
 import threading
@@ -52,27 +52,24 @@ app.add_middleware(
 
 @app.get("/gpu")
 def gpu_status():
-    gpu_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
-    mem_allocated = torch.cuda.memory_allocated(0) / (1024**3) if torch.cuda.is_available() else 0.0
-    mem_total = (torch.cuda.get_device_properties(0).total_memory / (1024**3)) if torch.cuda.is_available() else 0.0
     return {
         "status": "ready",
-        "device": str(device),
-        "gpu_name": gpu_name,
-        "vram_allocated_gb": round(mem_allocated, 2),
-        "vram_total_gb": round(mem_total, 2),
-        "model": MODEL_ID,
+        "engine": "Tranquil Neural Core",
+        "state": "operational",
         "version": APP_VERSION,
     }
 
 
 # ---- Security, IP Quotas & GPU Concurrency Queue ---------------------------
-MAX_GENERATIONS_PER_IP = 5
-MAX_DOWNLOADS_PER_IP = 5
+MAX_GENERATIONS_PER_IP = 2  # Tight demo limit for LinkedIn visitors
+MAX_DOWNLOADS_PER_IP = 3
 QUOTA_WINDOW_SEC = 86400.0  # 24 hours
-MAX_QUEUE_WAITING = 6       # max 2 jobs waiting in queue behind the 1 running
+MAX_QUEUE_WAITING = 2       # max 2 jobs waiting in queue behind the 1 running
+MAX_DAILY_GLOBAL_GENERATIONS = 35  # Master circuit breaker: prevents GPU burnout
 
 ip_quotas = {}  # ip -> {"generations": int, "downloads": int, "window_start": float, "active_job_id": str | None}
+global_generations_today = 0
+global_window_start = time.time()
 quota_lock = threading.Lock()
 
 def get_client_ip(request: Request) -> str:
@@ -284,15 +281,31 @@ def generate(req: GenerateRequest, request: Request):
     ip = get_client_ip(request)
     admin = is_admin_ip(ip)
 
-    # 1. Concurrency queue capacity check
+    global global_generations_today, global_window_start
+    now = time.time()
+    if now - global_window_start > QUOTA_WINDOW_SEC:
+        global_generations_today = 0
+        global_window_start = now
+
+    # 1. Global Daily Circuit Breaker Check
+    if not admin and global_generations_today >= MAX_DAILY_GLOBAL_GENERATIONS:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": f"Today's community demo quota ({MAX_DAILY_GLOBAL_GENERATIONS} tracks) has been reached. Relax and listen to Tranquil Soul Music on Spotify while slots reset!",
+                "code": "GLOBAL_DAILY_LIMIT_REACHED"
+            }
+        )
+
+    # 2. Concurrency queue capacity check
     waiting_jobs = [j for j in jobs.values() if not j["done"] and not j.get("started", False)]
     if not admin and len(waiting_jobs) >= MAX_QUEUE_WAITING:
         return JSONResponse(
             status_code=429,
-            content={"detail": f"Studio is currently at peak capacity ({len(waiting_jobs)} creators in queue). Please try again in 30 seconds.", "code": "QUEUE_FULL"}
+            content={"detail": f"Studio is currently at peak capacity ({len(waiting_jobs)} creators in queue). Please relax in the lounge!", "code": "QUEUE_FULL"}
         )
 
-    # 2. Per-IP quotas and single active job check
+    # 3. Per-IP quotas and single active job check
     if not admin:
         q = get_or_create_quota(ip)
         # Check active job
@@ -303,17 +316,19 @@ def generate(req: GenerateRequest, request: Request):
                 content={"detail": "You already have a generation running or in queue. Please wait for it to complete.", "code": "JOB_IN_PROGRESS"}
             )
 
-        # Check 5 generations limit
+        # Check 2 generations limit for demo
         if q["generations"] >= MAX_GENERATIONS_PER_IP:
-            now = time.time()
             hours_left = max(1, int((QUOTA_WINDOW_SEC - (now - q["window_start"])) / 3600))
             return JSONResponse(
                 status_code=429,
-                content={"detail": f"Daily generation limit reached ({MAX_GENERATIONS_PER_IP}/{MAX_GENERATIONS_PER_IP} tracks). Resets in ~{hours_left}h.", "code": "QUOTA_EXCEEDED"}
+                content={"detail": f"Demo limit reached ({MAX_GENERATIONS_PER_IP}/{MAX_GENERATIONS_PER_IP} tracks). Resets in ~{hours_left}h.", "code": "QUOTA_EXCEEDED"}
             )
         q["generations"] += 1
+        global_generations_today += 1
 
-    duration_sec = max(MIN_DURATION, min(MAX_DURATION, req.duration_sec))
+    # Clamp duration: visitors strictly capped at 20s to prevent hardware tie-up
+    max_allowed_dur = MAX_DURATION if admin else 20.0
+    duration_sec = max(MIN_DURATION, min(max_allowed_dur, req.duration_sec))
     guidance_scale = max(1.0, min(10.0, req.guidance_scale))
 
     prompt = req.prompt.strip()[:800]
@@ -503,12 +518,22 @@ def capacity(request: Request):
     admin = is_admin_ip(ip)
     waiting_jobs = [j for j in jobs.values() if not j["done"] and not j.get("started", False)]
     active_jobs = [j for j in jobs.values() if not j["done"]]
-    is_full = not admin and len(waiting_jobs) >= MAX_QUEUE_WAITING
+    global global_generations_today, global_window_start
+    now = time.time()
+    if now - global_window_start > QUOTA_WINDOW_SEC:
+        global_generations_today = 0
+        global_window_start = now
+
+    circuit_tripped = not admin and global_generations_today >= MAX_DAILY_GLOBAL_GENERATIONS
+    is_full = not admin and (len(waiting_jobs) >= MAX_QUEUE_WAITING or circuit_tripped)
     return {
         "is_full": is_full,
         "active_jobs": len(active_jobs),
         "waiting_jobs": len(waiting_jobs),
         "max_queue": MAX_QUEUE_WAITING,
+        "daily_visitor_total": global_generations_today,
+        "daily_visitor_max": MAX_DAILY_GLOBAL_GENERATIONS,
+        "circuit_tripped": circuit_tripped,
         "is_admin": admin
     }
 
@@ -1616,7 +1641,7 @@ INDEX_HTML = """<!DOCTYPE html>
     <span class="front-door-kicker">TRANQUIL SOUL MUSIC STUDIO</span>
     <h1 class="front-door-headline">We're really busy right now, but come back soon to make some music.</h1>
     <p class="front-door-subtitle">
-      Our local NVIDIA RTX 3090 GPU is currently synthesizing audio at maximum capacity for active creators. 
+      Our neural synthesis engine is currently creating at peak capacity for active creators. 
       Please make yourself comfortable in the sanctuary lounge—listen to Tranquil Soul Music on Spotify or enjoy our ambient background stream while we hold your place.
     </p>
 
@@ -1625,7 +1650,7 @@ INDEX_HTML = """<!DOCTYPE html>
       <div class="radar-dot-pulse"></div>
       <div class="radar-status-info">
         <div class="radar-status-title">
-          <strong>RTX 3090 Studio Busy</strong> · <span id="frontDoorQueueCount">Queue Slots In Use</span>
+          <strong>Studio Engine Busy</strong> · <span id="frontDoorQueueCount">Queue Slots In Use</span>
         </div>
         <div class="radar-status-timer">
           Auto-checking availability in <span id="frontDoorTimer">10s</span>...
@@ -1711,28 +1736,27 @@ INDEX_HTML = """<!DOCTYPE html>
     </div>
     <div class="gpu-badge" id="gpuBadge" onclick="openGpuModal()">
       <span class="gpu-dot"></span>
-      <span id="gpuLabel">Local GPU: Checking...</span>
+      <span id="gpuLabel">Studio Engine: Online</span>
     </div>
   </div>
 
   <div id="gpuModal" class="modal-overlay" style="display:none">
     <div class="modal-card">
       <div class="card-head" style="margin-bottom:12px">
-        <span class="step-badge">GPU</span>
-        <div class="card-title">Local RTX 3090 Pipeline</div>
+        <span class="step-badge">✦</span>
+        <div class="card-title">Tranquilicy Neural Engine</div>
       </div>
-      <div class="hint" style="margin-bottom:18px">
-        Tranquilicy runs directly on your local NVIDIA GeForce RTX 3090 GPU (24GB VRAM) with zero cloud GPU fees.
+      <div class="hint" style="margin-bottom:18px; font-size:12.5px; line-height:1.6;">
+        Tranquilicy Creative Studio crafts high-fidelity ambient, chillout, and meditative audio directly from multi-dimensional latent sonic coordinates.
       </div>
       <div class="field">
-        <label>Backend GPU Server URL</label>
-        <input type="text" id="gpuEndpointInput" placeholder="http://localhost:8000 or Cloudflare Tunnel URL">
-        <div class="hint" id="gpuStatusText">Testing connection to local backend...</div>
+        <div class="hint" id="gpuStatusText" style="color:var(--gold-text); font-weight:500;">Studio synthesis engine operational.</div>
+        <input type="hidden" id="gpuEndpointInput">
       </div>
       <div style="display:flex; gap:10px; margin-top:24px">
-        <button type="button" class="btn-primary" id="gpuSaveBtn" style="margin:0" onclick="saveGpuEndpoint()">Save & Test</button>
-        <button type="button" class="btn-ghost" id="gpuDoorPreviewBtn" style="margin:0" onclick="closeGpuModal(); openFrontDoorLounge();">Preview Front Door</button>
+        <button type="button" class="btn-primary" id="gpuDoorPreviewBtn" style="margin:0" onclick="closeGpuModal(); openFrontDoorLounge();">View Lounge</button>
         <button type="button" class="btn-ghost" id="gpuCloseBtn" style="margin:0" onclick="closeGpuModal()">Close</button>
+        <button type="button" id="gpuSaveBtn" style="display:none"></button>
       </div>
     </div>
   </div>
@@ -1753,7 +1777,7 @@ INDEX_HTML = """<!DOCTYPE html>
     <div class="card-head">
       <span class="step-badge">01</span>
       <div class="card-title">Generate</div>
-      <div class="quota-pill" id="quotaPill">⚡ <span id="quotaText">5/5 Generations Left</span></div>
+      <div class="quota-pill" id="quotaPill">⚡ <span id="quotaText">2/2 Demo Tracks Left</span></div>
     </div>
     <div class="card-hint">Select an archetype or compose your vision using the prompter matrix.</div>
 
@@ -2256,7 +2280,7 @@ INDEX_HTML = """<!DOCTYPE html>
       <div class="deck-badges">
         <span class="badge-chip" id="masterLosslessBadge">24-BIT 48kHz LOSSLESS</span>
         <span class="badge-chip gold" id="masterMoodBadge">Zen Harmonic · 432Hz</span>
-        <span class="badge-chip" id="masterGpuBadge">RTX 3090 CORE</span>
+        <span class="badge-chip" id="masterGpuBadge">✦ NEURAL CORE</span>
       </div>
     </div>
 
@@ -2272,7 +2296,7 @@ INDEX_HTML = """<!DOCTYPE html>
           <span class="radar-title">GPU Slot Reserved: <strong id="queuePosText">Position #1 in Queue</strong></span>
           <span class="radar-timer" id="queueEstText">Est. Wait: ~9s</span>
         </div>
-        <p class="radar-subtext">The local RTX 3090 is finishing an active track. Your generation will start automatically the millisecond the GPU is free. Please hold on!</p>
+        <p class="radar-subtext">The studio engine is currently finishing an active track. Your generation will start automatically the millisecond the GPU is free. Please hold on!</p>
       </div>
       <button type="button" class="radar-cancel-btn" id="btnCancelQueue" onclick="cancelGeneration()">Cancel Request</button>
     </div>
@@ -3135,7 +3159,7 @@ async function generate() {
   cancelBtn.style.display = 'inline-block';
   barInner.style.width = '0%';
   statusPct.textContent = '0%';
-  statusLabel.textContent = dur > 30 ? 'Generating (chained on RTX 3090)...' : 'Generating on RTX 3090...';
+  statusLabel.textContent = 'Synthesizing neural audio...';
 
   ['downloadBtn', 'masterChip', 'downloadVideoBtn', 'stillChip'].forEach(id => setChip(id, null));
   [lastVideoUrl, lastMasterUrl, lastStillUrl].forEach(u => { if (u) URL.revokeObjectURL(u); });
@@ -3203,7 +3227,7 @@ async function generate() {
           barInner.style.width = Math.max(3, pct) + '%';
           statusPct.textContent = pct + '%';
           btn.innerHTML = `<span class="spin-ring"></span> Synthesizing (${pct}%)...`;
-          statusLabel.textContent = dur > 30 ? 'Generating (chained on RTX 3090)...' : 'Synthesizing on RTX 3090...';
+          statusLabel.textContent = 'Synthesizing neural audio...';
         }
       }
       if (s.done) {
@@ -4788,7 +4812,7 @@ function saveStillFrame() {
 })();
 
 
-// ---- Local GPU API Endpoint Resolver ----
+// ---- Neural Studio API Endpoint Resolver ----
 const DEFAULT_GPU_TUNNEL = 'https://clearly-gather-deviation-shorter.trycloudflare.com';
 
 function getApiEndpoint() {
@@ -4817,14 +4841,14 @@ async function checkGpuStatus() {
     if (res.ok) {
       const data = await res.json();
       badge.className = 'gpu-badge online';
-      label.textContent = `${data.gpu_name || 'RTX 3090'} · Local GPU Online`;
-      document.getElementById('gpuStatusText').textContent = `Connected: ${data.gpu_name} (${data.vram_allocated_gb}GB / ${data.vram_total_gb}GB VRAM in use)`;
+      label.textContent = `Tranquil Neural Core · Online`;
+      document.getElementById('gpuStatusText').textContent = `Tranquil Neural Engine · Operational`;
       return true;
     }
   } catch(e) {}
   badge.className = 'gpu-badge offline';
-  label.textContent = 'Local GPU Offline (Click to configure)';
-  document.getElementById('gpuStatusText').textContent = 'Cannot reach GPU server. Make sure python 09_api_server.py is running.';
+  label.textContent = 'Studio Engine Offline';
+  document.getElementById('gpuStatusText').textContent = 'Connecting to studio engine...';
   return false;
 }
 
@@ -4941,7 +4965,7 @@ async function checkFrontDoorCapacity(userTriggered = false) {
       if (!data.is_full) {
         // Slot is open! Welcome user inside!
         closeFrontDoorLounge();
-        showStudioNotice('Studio Available!', 'A generation slot has freed up on the local RTX 3090. Welcome inside Tranquil Soul Music Studio!', '✦');
+        showStudioNotice('Studio Available!', 'A generation slot has freed up in the studio. Welcome inside Tranquil Soul Music Studio!', '✦');
         return;
       }
     }
