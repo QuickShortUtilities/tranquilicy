@@ -1,4 +1,4 @@
-"""
+﻿"""
 Local web app for generating chillout music: loads MusicGen once, serves a
 browser GUI styled to match the Tranquil Soul Music / Tranquilicy brand.
 Supports durations beyond MusicGen's ~30s single-pass limit by chaining
@@ -12,6 +12,8 @@ Then open local server in a browser.
 import io
 import threading
 import time
+import os
+import json
 import uuid
 from pathlib import Path
 
