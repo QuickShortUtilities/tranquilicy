@@ -82,9 +82,30 @@ MAX_QUEUE_WAITING = 6
 MAX_DAILY_GLOBAL_GENERATIONS = 400
 
 ip_quotas = {}  # ip -> {"generations": int, "downloads": int, "window_start": float, "active_job_id": str | None}
+
 global_generations_today = 0
 global_window_start = time.time()
 quota_lock = threading.Lock()
+
+STATS_FILE = "stats.json"
+def load_stats():
+    if os.path.exists(STATS_FILE):
+        try:
+            with open(STATS_FILE, "r") as f:
+                return json.load(f).get("total_generations", 0)
+        except:
+            pass
+    return 0
+
+def save_stats(total):
+    try:
+        with open(STATS_FILE, "w") as f:
+            json.dump({"total_generations": total}, f)
+    except:
+        pass
+
+total_generations = load_stats()
+
 
 def get_client_ip(request: Request) -> str:
     """Resolve the caller's IP for quota purposes.
@@ -318,7 +339,7 @@ def generate(req: GenerateRequest, request: Request):
     ip = get_client_ip(request)
     admin = is_admin_ip(ip)
 
-    global global_generations_today, global_window_start
+    global global_generations_today, global_window_start, total_generations
     now = time.time()
     if now - global_window_start > QUOTA_WINDOW_SEC:
         global_generations_today = 0
@@ -361,7 +382,11 @@ def generate(req: GenerateRequest, request: Request):
                 content={"detail": f"Demo limit reached ({MAX_GENERATIONS_PER_IP}/{MAX_GENERATIONS_PER_IP} tracks). Resets in ~{hours_left}h.", "code": "QUOTA_EXCEEDED"}
             )
         q["generations"] += 1
+
         global_generations_today += 1
+        global total_generations
+        total_generations += 1
+        save_stats(total_generations)
 
     # Full duration support: allows 60s, 90s, 120s, 180s with multi-pass continuation chaining
     duration_sec = max(MIN_DURATION, min(MAX_DURATION, req.duration_sec))
@@ -554,7 +579,7 @@ def capacity(request: Request):
     admin = is_admin_ip(ip)
     waiting_jobs = [j for j in jobs.values() if not j["done"] and not j.get("started", False)]
     active_jobs = [j for j in jobs.values() if not j["done"]]
-    global global_generations_today, global_window_start
+    global global_generations_today, global_window_start, total_generations
     now = time.time()
     if now - global_window_start > QUOTA_WINDOW_SEC:
         global_generations_today = 0
@@ -567,8 +592,11 @@ def capacity(request: Request):
         "active_jobs": len(active_jobs),
         "waiting_jobs": len(waiting_jobs),
         "max_queue": MAX_QUEUE_WAITING,
+
         "daily_visitor_total": global_generations_today,
+        "total_generations": total_generations,
         "daily_visitor_max": MAX_DAILY_GLOBAL_GENERATIONS,
+
         "circuit_tripped": circuit_tripped,
         "is_admin": admin
     }
