@@ -454,8 +454,7 @@ def index():
     return HTMLResponse(html, headers={"Cache-Control": "no-store, max-age=0"})
 
 
-INDEX_HTML = """
-<!DOCTYPE html>
+INDEX_HTML = """<!DOCTYPE html>
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
@@ -618,8 +617,27 @@ INDEX_HTML = """
   .dial-label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--text-2); margin-top: 8px; }
   .dial-value { font-family: var(--display); font-style: italic; color: var(--gold-text); font-size: 13px; margin-top: 2px; }
   
-  .star-wrap { display: flex; justify-content: center; margin: 6px 0 16px; }
-  #starChart { touch-action: none; }
+  .star-wrap {
+    display: flex; justify-content: center; align-items: center;
+    margin: 14px auto 20px; width: 100%; max-width: 360px; position: relative;
+    background: radial-gradient(circle at center, rgba(193,166,115,.08) 0%, rgba(16,15,13,.4) 65%, transparent 100%);
+    border-radius: 50%; padding: 8px;
+  }
+  #starChart {
+    display: block; width: 100%; height: auto; max-width: 330px;
+    aspect-ratio: 1 / 1; touch-action: none; filter: drop-shadow(0 4px 20px rgba(0,0,0,.65));
+  }
+  .spin-ring {
+    display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,.25);
+    border-top-color: #D4B97A; border-radius: 50%; animation: spinRing .7s linear infinite;
+    vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spinRing { to { transform: rotate(360deg); } }
+  .gen-error-banner {
+    margin-top: 12px; padding: 10px 14px; background: rgba(239,68,68,.12);
+    border: 1px solid rgba(239,68,68,.35); border-radius: var(--radius-sm);
+    color: #FCA5A5; font-size: 12px; line-height: 1.5; text-align: left;
+  }
   body.dragging-knob, body.dragging-knob * { cursor: ns-resize !important; }
   body.dragging-star, body.dragging-star * { cursor: grabbing !important; }
   
@@ -926,7 +944,7 @@ INDEX_HTML = """
     <div class="section-label">Sound Dimensions</div>
     <div class="dials-grid" id="dialsGrid"></div>
     <div class="star-wrap">
-      <svg id="starChart" width="180" height="180" viewBox="0 0 180 180"></svg>
+      <svg id="starChart" width="330" height="330" viewBox="0 0 330 330"></svg>
     </div>
 
     <div class="section-label">Negative Guidance</div>
@@ -946,6 +964,7 @@ INDEX_HTML = """
 
     <div class="card-actions">
       <button id="genBtn" class="btn-primary" onclick="generate()">Generate Track</button>
+      <div id="genErrorNotice" class="gen-error-banner" style="display:none"></div>
     </div>
   </div>
 
@@ -1502,19 +1521,19 @@ function buildDials() {
   });
 }
 
-// ---- Star Chart Drag: grab a vertex directly ----
+// ---- Star Chart Drag: grab a vertex directly (Enlarged 330x330) ----
 let draggingDialKey = null, hoverDialKey = null;
 function setupStarChartDrag() {
   const svg = document.getElementById('starChart');
-  const cx = 90, cy = 90, maxR = 68;
+  const cx = 165, cy = 165, maxR = 112;
   const n = DIALS.length;
   const angleFor = i => -Math.PI / 2 + i * (2 * Math.PI / n);
 
   function svgPoint(e) {
     const rect = svg.getBoundingClientRect();
     return {
-      x: (e.clientX - rect.left) * (180 / rect.width),
-      y: (e.clientY - rect.top) * (180 / rect.height),
+      x: (e.clientX - rect.left) * (330 / rect.width),
+      y: (e.clientY - rect.top) * (330 / rect.height),
     };
   }
 
@@ -1533,10 +1552,10 @@ function setupStarChartDrag() {
   function valueFromPointer(p, i) {
     const a = angleFor(i);
     const proj = (p.x - cx) * Math.cos(a) + (p.y - cy) * Math.sin(a);
-    return Math.max(0, Math.min(100, (proj / maxR) * 100));
+    return Math.max(0, Math.min(100, Math.round((proj / maxR) * 100)));
   }
 
-  const GRAB_RADIUS = 22;
+  const GRAB_RADIUS = 28;
 
   svg.addEventListener('pointerdown', e => {
     const p = svgPoint(e);
@@ -1584,7 +1603,7 @@ function setupStarChartDrag() {
 
 function drawStarChart() {
   const svg = document.getElementById('starChart');
-  const cx = 90, cy = 90, maxR = 68;
+  const cx = 165, cy = 165, maxR = 112;
   const n = DIALS.length;
   const angleFor = i => -Math.PI / 2 + i * (2 * Math.PI / n);
   const pt = (i, frac) => {
@@ -1592,25 +1611,42 @@ function drawStarChart() {
     return [cx + Math.cos(a) * maxR * frac, cy + Math.sin(a) * maxR * frac];
   };
   let svgHtml = '';
-  [0.33, 0.66, 1].forEach(frac => {
+  // Concentric reference rings
+  [0.33, 0.66, 1].forEach((frac, idx) => {
     const ring = DIALS.map((_, i) => pt(i, frac).join(',')).join(' ');
-    svgHtml += `<polygon points="${ring}" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="1"/>`;
+    const strokeDash = idx === 2 ? 'none' : '2,3';
+    svgHtml += `<polygon points="${ring}" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="1" stroke-dasharray="${strokeDash}"/>`;
   });
+  // Radial spokes
   DIALS.forEach((_, i) => {
     const [x, y] = pt(i, 1);
-    svgHtml += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="rgba(255,255,255,.07)" stroke-width="1"/>`;
+    svgHtml += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="rgba(255,255,255,.08)" stroke-width="1"/>`;
   });
+  // Current active value polygon
   const valuePts = DIALS.map((d, i) => pt(i, knobs[d.key].value / 100).join(',')).join(' ');
-  svgHtml += `<polygon points="${valuePts}" fill="rgba(193,166,115,.16)" stroke="#C1A673" stroke-width="1.5"/>`;
+  svgHtml += `<polygon points="${valuePts}" fill="rgba(193,166,115,.20)" stroke="#C1A673" stroke-width="1.8"/>`;
+  
+  // Handles and labels
   DIALS.forEach((d, i) => {
-    const [x, y] = pt(i, knobs[d.key].value / 100);
+    const val = knobs[d.key].value;
+    const [x, y] = pt(i, val / 100);
     const active = draggingDialKey === d.key || hoverDialKey === d.key;
     if (active) {
-      svgHtml += `<circle cx="${x}" cy="${y}" r="11" fill="rgba(193,166,115,.25)"/>`;
+      svgHtml += `<circle cx="${x}" cy="${y}" r="15" fill="rgba(193,166,115,.35)"/>`;
     }
-    svgHtml += `<circle cx="${x}" cy="${y}" r="${active ? 6 : 4.2}" fill="#D4B97A" stroke="#090807" stroke-width="1.2"/>`;
-    const [lx, ly] = pt(i, 1.25);
-    svgHtml += `<text x="${lx}" y="${ly}" fill="${active ? '#D4B97A' : '#9A9188'}" font-size="${active ? '9' : '8'}" font-family="Montserrat, sans-serif" text-anchor="middle" dominant-baseline="middle">${d.label}</text>`;
+    svgHtml += `<circle cx="${x}" cy="${y}" r="${active ? 7 : 5}" fill="${active ? '#F2EFE9' : '#D4B97A'}" stroke="#090807" stroke-width="1.6"/>`;
+    
+    // Label positioning
+    const [lx, ly] = pt(i, 1.28);
+    let anchor = 'middle', baseline = 'middle';
+    if (i === 0) { anchor = 'middle'; baseline = 'auto'; }
+    else if (i === 3) { anchor = 'middle'; baseline = 'hanging'; }
+    else if (i === 1 || i === 2) { anchor = 'start'; baseline = 'middle'; }
+    else { anchor = 'end'; baseline = 'middle'; }
+    
+    const labelColor = active ? '#D4B97A' : '#A59D92';
+    const numColor = active ? '#F2EFE9' : '#C1A673';
+    svgHtml += `<text x="${lx}" y="${ly}" fill="${labelColor}" font-size="${active ? '11' : '9.5'}" font-family="Montserrat, sans-serif" text-anchor="${anchor}" dominant-baseline="${baseline}"><tspan font-weight="${active ? '600' : '500'}">${d.label}</tspan> <tspan fill="${numColor}" font-size="${active ? '10' : '9'}">${Math.round(val)}</tspan></text>`;
   });
   svg.innerHTML = svgHtml;
 }
@@ -1953,18 +1989,24 @@ function updateDownloadNames() {
 // ---- Audio Generation Handler ----
 async function generate() {
   const btn = document.getElementById('genBtn');
+  const genNotice = document.getElementById('genErrorNotice');
   const outbar = document.getElementById('outbar');
   const barInner = document.getElementById('barInner');
   const statusPct = document.getElementById('statusPct');
   const statusLabel = document.getElementById('statusLabel');
   const errorText = document.getElementById('errorText');
   const player = document.getElementById('player');
-  const dur = parseFloat(document.getElementById('duration').value);
+  const dur = parseFloat(document.getElementById('duration').value) || 20;
 
   const cancelBtn = document.getElementById('cancelBtn');
   const playerWrap = document.getElementById('playerWrap');
 
   btn.disabled = true;
+  btn.classList.add('busy');
+  const origBtnHtml = 'Generate Track';
+  btn.innerHTML = '<span class="spin-ring"></span> Synthesizing...';
+
+  if (genNotice) { genNotice.style.display = 'none'; genNotice.textContent = ''; }
   errorText.style.display = 'none';
   playerWrap.hidden = true;
   playerWrap.classList.remove('ready');
@@ -1972,7 +2014,7 @@ async function generate() {
   cancelBtn.style.display = 'inline-block';
   barInner.style.width = '0%';
   statusPct.textContent = '0%';
-  statusLabel.textContent = dur > 30 ? 'Generating (chained)...' : 'Generating...';
+  statusLabel.textContent = dur > 30 ? 'Generating (chained on RTX 3090)...' : 'Generating on RTX 3090...';
 
   ['downloadBtn', 'masterChip', 'downloadVideoBtn', 'stillChip'].forEach(id => setChip(id, null));
   [lastVideoUrl, lastMasterUrl, lastStillUrl].forEach(u => { if (u) URL.revokeObjectURL(u); });
@@ -1984,7 +2026,11 @@ async function generate() {
   renderFlow();
 
   try {
-    const startRes = await fetch(getApiUrl('/generate'), {
+    const endpoint = getApiEndpoint();
+    console.log('[Tranquilicy] Calling GPU endpoint:', endpoint || '(same origin)');
+    
+    const targetUrl = getApiUrl('/generate');
+    const startRes = await fetch(targetUrl, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
@@ -1993,23 +2039,42 @@ async function generate() {
         duration_sec: dur,
       })
     });
-    if (!startRes.ok) throw new Error('Server error: ' + startRes.status);
-    const { job_id } = await startRes.json();
+    
+    if (!startRes.ok) {
+      let errDetail = 'Server error: ' + startRes.status;
+      try {
+        const errJson = await startRes.json();
+        if (errJson.detail) errDetail = errJson.detail;
+        else if (errJson.error) errDetail = errJson.error;
+      } catch(e) {}
+      throw new Error(errDetail);
+    }
+    
+    const data = await startRes.json();
+    if (!data.job_id) {
+      throw new Error('Invalid response from server: ' + JSON.stringify(data));
+    }
+    const { job_id } = data;
     currentJobId = job_id;
 
     while (true) {
       await new Promise(r => setTimeout(r, 400));
-      const s = await (await fetch(getApiUrl('/status/' + job_id))).json();
+      const sRes = await fetch(getApiUrl('/status/' + job_id));
+      if (!sRes.ok) throw new Error('Status check failed: ' + sRes.status);
+      const s = await sRes.json();
       if (s.error) throw new Error(s.error);
       if (typeof s.progress === 'number') {
         const pct = Math.round(s.progress * 100);
         barInner.style.width = pct + '%';
         statusPct.textContent = pct + '%';
+        btn.innerHTML = `<span class="spin-ring"></span> Synthesizing (${pct}%)...`;
       }
       if (s.done) break;
     }
 
+    btn.innerHTML = '<span class="spin-ring"></span> Fetching Audio...';
     const audioRes = await fetch(getApiUrl('/result/' + job_id));
+    if (!audioRes.ok) throw new Error('Failed to retrieve audio: ' + audioRes.status);
     const blob = await audioRes.blob();
     if (lastAudioUrl) URL.revokeObjectURL(lastAudioUrl);
     const url = URL.createObjectURL(blob);
@@ -2022,6 +2087,8 @@ async function generate() {
 
     statusLabel.textContent = `Ready · ${dur}s`;
     statusPct.textContent = '';
+    btn.innerHTML = '✓ Track Ready!';
+    setTimeout(() => { btn.innerHTML = origBtnHtml; }, 2200);
 
     flow.generated = true;
     renderFlow();
@@ -2029,11 +2096,21 @@ async function generate() {
     if (!document.getElementById('trackTitle').value.trim()) rerollTitle();
     updateDownloadNames();
     refreshPreview();
+
+    // Scroll to player so user immediately sees results
+    outbar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } catch (e) {
-    errorText.textContent = e.message === 'Cancelled' ? 'Cancelled.' : 'Error: ' + e.message;
+    console.error('[Tranquilicy] Generation error:', e);
+    const msg = e.message === 'Cancelled' ? 'Cancelled.' : 'Error: ' + e.message;
+    errorText.textContent = msg;
     errorText.style.display = 'block';
+    if (genNotice) {
+      genNotice.style.display = 'block';
+      genNotice.innerHTML = `⚠️ <b>Generation issue:</b> ${msg}<br><span style="font-size:11px;opacity:0.8;">Check that scripts/09_api_server.py is running on your RTX 3090, or click the GPU badge in the top-right to inspect connection.</span>`;
+    }
     barInner.style.width = '0%';
     statusPct.textContent = '';
+    btn.innerHTML = origBtnHtml;
     if (flow.generated && player.src) {
       playerWrap.hidden = false;
       requestAnimationFrame(() => playerWrap.classList.add('ready'));
@@ -2044,6 +2121,7 @@ async function generate() {
     }
   } finally {
     btn.disabled = false;
+    btn.classList.remove('busy');
     cancelBtn.style.display = 'none';
     outbar.classList.remove('busy');
   }
@@ -2957,11 +3035,20 @@ function saveStillFrame() {
 
 
 // ---- Local GPU API Endpoint Resolver ----
+const DEFAULT_GPU_TUNNEL = 'https://clearly-gather-deviation-shorter.trycloudflare.com';
+
 function getApiEndpoint() {
-  const stored = localStorage.getItem('tranquilicy_gpu_endpoint');
-  if (stored) return stored.replace(/\/+$/, '');
-  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  return isLocal ? '' : 'https://clearly-gather-deviation-shorter.trycloudflare.com';
+  const stored = (localStorage.getItem('tranquilicy_gpu_endpoint') || '').trim();
+  if (stored && stored !== 'null' && stored !== 'undefined') {
+    return stored.replace(/\/+$/, '');
+  }
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return window.location.port === '8000' ? '' : 'http://127.0.0.1:8000';
+  }
+  if (window.location.protocol === 'file:') {
+    return 'http://127.0.0.1:8000';
+  }
+  return DEFAULT_GPU_TUNNEL;
 }
 function getApiUrl(path) {
   const base = getApiEndpoint();
