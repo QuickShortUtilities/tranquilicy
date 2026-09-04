@@ -416,8 +416,11 @@ def index():
         f'<option value="{f}"{" selected" if f == "WAV" else ""}>{_FORMAT_LABELS[f]}</option>'
         for f in AVAILABLE_FORMATS
     )
+    from pathlib import Path
+    disk_html = Path(__file__).resolve().parent.parent / "index.html"
+    source = disk_html.read_text(encoding="utf-8") if disk_html.is_file() else INDEX_HTML
     html = (
-        INDEX_HTML
+        source
         .replace("__APP_VERSION__", APP_VERSION)
         .replace("__FORMAT_OPTIONS__", format_options)
     )
