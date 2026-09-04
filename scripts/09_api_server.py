@@ -542,15 +542,25 @@ def capacity(request: Request):
 def lounge_info():
     return {
         "artist": "Tranquil Soul Music",
-        "current_track": "Earth Pulse (Ambient Chillout Master)",
+        "tracks": [
+            {"id": "earth_pulse", "title": "Earth Pulse", "meta": "Deep Ambient Master · 24-Bit"},
+            {"id": "sun_bleached_haze", "title": "Sun-Bleached Haze", "meta": "Warm Sunset Chill · 24-Bit"},
+            {"id": "weightless_stillness", "title": "Weightless Stillness", "meta": "Zen Sanctuary Meditation · 24-Bit"}
+        ],
         "spotify_url": "https://open.spotify.com/artist/4vAxYA9zh9HHWSVgOHvGrv",
         "spotify_embed": "https://open.spotify.com/embed/artist/4vAxYA9zh9HHWSVgOHvGrv?utm_source=generator&theme=0"
     }
 
 
 @app.get("/lounge/track")
-def lounge_track():
-    track_path = Path(__file__).resolve().parent.parent / "assets" / "lounge" / "earth_pulse.mp3"
+def lounge_track(track: str = "earth_pulse"):
+    allowed = {
+        "earth_pulse": "earth_pulse.mp3",
+        "sun_bleached_haze": "sun_bleached_haze.mp3",
+        "weightless_stillness": "weightless_stillness.mp3",
+    }
+    filename = allowed.get(track, "earth_pulse.mp3")
+    track_path = Path(__file__).resolve().parent.parent / "assets" / "lounge" / filename
     if not track_path.exists():
         return Response(status_code=404, content="Lounge track not found")
     return FileResponse(track_path, media_type="audio/mpeg", headers={"Accept-Ranges": "bytes"})
@@ -650,7 +660,25 @@ INDEX_HTML = """<!DOCTYPE html>
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
-<title>Tranquilicy Studio</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Tranquil Soul Music Studio · Creative Soundstage</title>
+<meta name="description" content="Tranquil Soul Music Studio — craft high-fidelity ambient, chillout, and meditative soundscapes directly from your browser. Featuring Tranquil Soul Music on Spotify.">
+<meta name="theme-color" content="#07080a">
+
+<!-- Open Graph / LinkedIn / Facebook -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Tranquil Soul Music Studio · Creative Soundstage">
+<meta property="og:description" content="Craft high-fidelity ambient, chillout, and meditative audio directly in your browser. Complete with stereo DSP mastering, binaural waves, and social visualizers.">
+<meta property="og:site_name" content="Tranquil Soul Music Studio">
+<meta property="og:url" content="https://clearly-gather-deviation-shorter.trycloudflare.com">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Tranquil Soul Music Studio · Creative Soundstage">
+<meta name="twitter:description" content="Craft high-fidelity ambient, chillout, and meditative soundscapes directly from your browser.">
+
+<!-- Favicon -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%23C9A96E' d='M16 2l3.5 10.5L30 16l-10.5 3.5L16 30l-3.5-10.5L2 16l10.5-3.5z'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&family=Montserrat:wght@300;400;500;600&family=Space+Grotesk:wght@300;400;500&display=swap" rel="stylesheet">
@@ -1694,6 +1722,11 @@ INDEX_HTML = """<!DOCTYPE html>
           <div>
             <div class="ambient-track-title" id="ambientTrackTitle">Earth Pulse · Ambient Master</div>
             <div class="ambient-track-meta">24-Bit 48kHz · Tranquil Soul Music</div>
+            <div class="lounge-track-pills" style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
+              <button type="button" class="lounge-pill active" onclick="switchLoungeTrack('earth_pulse', this)" style="padding:3px 8px; font-size:10px; border-radius:6px; border:1px solid var(--gold); background:rgba(212,185,122,0.15); color:var(--gold-text); cursor:pointer;">Earth Pulse</button>
+              <button type="button" class="lounge-pill" onclick="switchLoungeTrack('sun_bleached_haze', this)" style="padding:3px 8px; font-size:10px; border-radius:6px; border:1px solid rgba(255,255,255,0.08); background:rgba(0,0,0,0.3); color:var(--text-3); cursor:pointer;">Sun Haze</button>
+              <button type="button" class="lounge-pill" onclick="switchLoungeTrack('weightless_stillness', this)" style="padding:3px 8px; font-size:10px; border-radius:6px; border:1px solid rgba(255,255,255,0.08); background:rgba(0,0,0,0.3); color:var(--text-3); cursor:pointer;">Stillness</button>
+            </div>
           </div>
           <div class="ambient-controls">
             <button type="button" class="ambient-play-btn" id="btnLoungePlay" onclick="toggleLoungeAudio()">
@@ -2264,6 +2297,16 @@ INDEX_HTML = """<!DOCTYPE html>
   <!-- GRAND MASTER AUDIO DECK & QUEUE RADAR                                     -->
   <!-- ========================================================================= -->
   <div class="master-deck" id="outbar">
+    <!-- Instant Sanctuary Showcase Strip (Zero wait preview for visitors) -->
+    <div class="showcase-strip" style="display:flex; align-items:center; gap:8px; padding:10px 14px; background:rgba(212,185,122,0.06); border:1px solid rgba(212,185,122,0.18); border-radius:12px; margin-bottom:14px; flex-wrap:wrap;">
+      <span style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--gold-text); display:flex; align-items:center; gap:5px;">
+        <span>⚡ Instant Studio Showcase:</span>
+      </span>
+      <button type="button" class="speed-pill" onclick="loadInstantSample('earth_pulse', 'Earth Pulse (Ambient Master)')" style="font-size:11px; padding:4px 10px; border:1px solid rgba(212,185,122,0.35); background:rgba(212,185,122,0.12); color:var(--gold-text); cursor:pointer;">▶ Earth Pulse</button>
+      <button type="button" class="speed-pill" onclick="loadInstantSample('sun_bleached_haze', 'Sun-Bleached Haze (Sunset Chill)')" style="font-size:11px; padding:4px 10px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.3); color:var(--text-2); cursor:pointer;">▶ Sun-Bleached Haze</button>
+      <button type="button" class="speed-pill" onclick="loadInstantSample('weightless_stillness', 'Weightless Stillness (Zen Meditation)')" style="font-size:11px; padding:4px 10px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.3); color:var(--text-2); cursor:pointer;">▶ Weightless Stillness</button>
+      <span style="font-size:10.5px; color:var(--text-3); margin-left:auto;">Zero wait · 1-click preview</span>
+    </div>
     <!-- Top Deck Bar: Status, Brand Equalizer, Title & Badges -->
     <div class="deck-top-bar">
       <div class="deck-identity">
@@ -4996,6 +5039,80 @@ function toggleLoungeAudio() {
     audio.pause();
     if (playIcon) playIcon.style.display = 'inline';
     if (pauseIcon) pauseIcon.style.display = 'none';
+  }
+}
+
+function switchLoungeTrack(trackId, btnEl) {
+  const titles = {
+    'earth_pulse': 'Earth Pulse · Ambient Master',
+    'sun_bleached_haze': 'Sun-Bleached Haze · Sunset Chill',
+    'weightless_stillness': 'Weightless Stillness · Zen Meditation'
+  };
+  const titleEl = document.getElementById('ambientTrackTitle');
+  if (titleEl && titles[trackId]) titleEl.textContent = titles[trackId];
+
+  // Update pills style
+  document.querySelectorAll('.lounge-pill').forEach(p => {
+    p.style.borderColor = 'rgba(255,255,255,0.08)';
+    p.style.background = 'rgba(0,0,0,0.3)';
+    p.style.color = 'var(--text-3)';
+  });
+  if (btnEl) {
+    btnEl.style.borderColor = 'var(--gold)';
+    btnEl.style.background = 'rgba(212,185,122,0.15)';
+    btnEl.style.color = 'var(--gold-text)';
+  }
+
+  const audio = document.getElementById('loungeAudio');
+  if (audio) {
+    const api = getApiEndpoint();
+    audio.src = `${api}/lounge/track?track=${encodeURIComponent(trackId)}`;
+    if (isLoungePlaying) {
+      audio.play().catch(e => console.warn('[Tranquilicy] Switch track play error:', e));
+    }
+  }
+}
+
+async function loadInstantSample(trackId, title) {
+  try {
+    const api = getApiEndpoint();
+    const url = `${api}/lounge/track?track=${encodeURIComponent(trackId)}`;
+    const statusLabel = document.getElementById('statusLabel');
+    if (statusLabel) statusLabel.textContent = `Loading: ${title}...`;
+    
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Sample not found');
+    const blob = await res.blob();
+    
+    const player = document.getElementById('player');
+    const playerWrap = document.getElementById('playerWrap');
+    if (lastAudioUrl) URL.revokeObjectURL(lastAudioUrl);
+    const blobUrl = URL.createObjectURL(blob);
+    lastAudioUrl = blobUrl;
+    if (player) player.src = blobUrl;
+
+    if (playerWrap) {
+      playerWrap.hidden = false;
+      requestAnimationFrame(() => playerWrap.classList.add('ready'));
+    }
+
+    if (player) {
+      player.play().catch(err => console.warn('[Tranquilicy] Instant sample play:', err));
+    }
+
+    if (statusLabel) statusLabel.textContent = `Showcase: ${title}`;
+    const trackTitleInput = document.getElementById('trackTitle');
+    if (trackTitleInput) trackTitleInput.value = title;
+
+    flow.generated = true;
+    renderFlow();
+    unlockExportSteps();
+    updateDownloadNames();
+    refreshPreview();
+
+    if (typeof buildWaveformFromBlob === 'function') buildWaveformFromBlob(blob);
+  } catch (err) {
+    console.warn('[Tranquilicy] Error loading instant sample:', err);
   }
 }
 
