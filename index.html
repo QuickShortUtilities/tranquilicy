@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
@@ -747,38 +747,43 @@
 
   /* ---- Take Library Drawer ---- */
   .take-library-section {
-    margin-top: 24px; padding: 20px; background: var(--bg-2);
+    margin-top: 24px; padding: 20px 20px 14px; background: var(--bg-2);
     border: 1px solid var(--line); border-radius: var(--radius);
-    box-shadow: var(--lift);
+    box-shadow: var(--lift); overflow: hidden;
   }
   .take-library-head { margin-bottom: 14px; }
+  .take-tray-wrap { position: relative; }
   .take-tray {
-    display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px;
+    display: flex; gap: 12px; overflow-x: auto; padding-bottom: 12px;
     scrollbar-width: thin; scrollbar-color: var(--gold-deep) transparent;
+    -webkit-overflow-scrolling: touch;
   }
   .take-tray::-webkit-scrollbar { height: 6px; }
+  .take-tray::-webkit-scrollbar-track { background: transparent; }
   .take-tray::-webkit-scrollbar-thumb { background: var(--gold-deep); border-radius: 4px; }
   .take-card {
-    flex: 0 0 220px; background: var(--bg-3); border: 1px solid var(--line);
-    border-radius: var(--radius-sm); padding: 12px; transition: all .2s var(--ease);
-    display: flex; flex-direction: column; gap: 8px; cursor: pointer;
+    flex: 0 0 200px; min-width: 180px; background: var(--bg-3); border: 1px solid var(--line);
+    border-radius: var(--radius-sm); padding: 14px 12px 10px; transition: all .2s var(--ease);
+    display: flex; flex-direction: column; gap: 8px; cursor: pointer; min-height: 110px;
   }
   .take-card:hover, .take-card.active {
     border-color: var(--gold); background: var(--bg-4); transform: translateY(-2px);
     box-shadow: 0 6px 18px rgba(0,0,0,.4);
   }
   .take-card-title {
-    font-family: var(--display); font-size: 15px; font-weight: 500; color: var(--text);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-family: var(--display); font-size: 14px; font-weight: 500; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;
   }
   .take-card-meta {
-    font-size: 11px; color: var(--text-2); display: flex; justify-content: space-between;
+    font-size: 10.5px; color: var(--text-2); display: flex; justify-content: space-between;
+    gap: 4px;
   }
-  .take-card-actions { display: flex; gap: 6px; margin-top: 4px; }
+  .take-card-actions { display: flex; gap: 6px; margin-top: auto; }
   .take-btn-mini {
-    flex: 1; padding: 4px 8px; font-size: 10.5px; border-radius: 6px;
+    flex: 1; padding: 5px 6px; font-size: 10.5px; border-radius: 6px;
     border: 1px solid var(--line); background: rgba(255,255,255,.05); color: var(--text);
     cursor: pointer; transition: all .15s var(--ease); text-align: center;
+    text-decoration: none; display: block; line-height: 1.2;
   }
   .take-btn-mini:hover { background: var(--gold); color: var(--on-gold); border-color: var(--gold); }
 
@@ -1150,7 +1155,8 @@
       <label style="margin:0">Duration</label>
       <span class="val"><span id="durVal">20</span>s</span>
     </div>
-    <input type="range" id="duration" min="5" max="180" value="20">
+    <input type="range" id="duration" min="5" max="300" value="20">
+    <div class="hint" id="durHint">Tracks over 30s use multi-pass synthesis — generation takes longer.</div>
 
     <div class="card-actions">
       <button id="genBtn" class="btn-primary" onclick="generate()">Generate Track</button>
@@ -1565,32 +1571,27 @@
     </div>
   </div>
   </div>
+  </div>
 
   <!-- SESSION TAKES LIBRARY TRAY -->
   <div class="take-library-section" id="takeLibrarySection" style="display:none">
     <div class="take-library-head">
-      <div class="row" style="margin:0; align-items:center;">
-        <label style="margin:0; font-family:var(--display); font-size:17px; color:var(--gold-text); letter-spacing:.04em;">Session Takes Library (<span id="takeCount">0</span>)</label>
-        <span class="hint" style="margin:0">Instant 1-click A/B recall & downloads</span>
+      <div class="row" style="margin:0; align-items:flex-start; gap:8px;">
+        <div>
+          <label style="margin:0 0 4px; display:block; font-family:var(--display); font-size:17px; color:var(--gold-text); letter-spacing:.04em;">Tracks You Made This Session (<span id="takeCount">0</span>)</label>
+          <span class="hint" style="margin:0">Every track you generate this session is saved here for instant recall, A/B comparison, and WAV download.</span>
+        </div>
       </div>
     </div>
-    <div class="take-tray" id="takeTray"></div>
+    <div class="take-tray-wrap" style="overflow-x:auto; width:100%;">
+      <div class="take-tray" id="takeTray" style="display:flex; gap:12px; padding:10px 0;"></div>
+    </div>
   </div>
 
   <!-- ========================================================================= -->
   <!-- GRAND MASTER AUDIO DECK & QUEUE RADAR                                     -->
   <!-- ========================================================================= -->
   <div class="master-deck" id="outbar">
-    <!-- Instant Sanctuary Showcase Strip (Zero wait preview for visitors) -->
-    <div class="showcase-strip" style="display:flex; align-items:center; gap:8px; padding:10px 14px; background:rgba(212,185,122,0.06); border:1px solid rgba(212,185,122,0.18); border-radius:12px; margin-bottom:14px; flex-wrap:wrap;">
-      <span style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--gold-text); display:flex; align-items:center; gap:5px;">
-        <span>⚡ Instant Studio Showcase:</span>
-      </span>
-      <button type="button" class="speed-pill" onclick="loadInstantSample('earth_pulse', 'Earth Pulse (Ambient Master)')" style="font-size:11px; padding:4px 10px; border:1px solid rgba(212,185,122,0.35); background:rgba(212,185,122,0.12); color:var(--gold-text); cursor:pointer;">▶ Earth Pulse</button>
-      <button type="button" class="speed-pill" onclick="loadInstantSample('sun_bleached_haze', 'Sun-Bleached Haze (Sunset Chill)')" style="font-size:11px; padding:4px 10px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.3); color:var(--text-2); cursor:pointer;">▶ Sun-Bleached Haze</button>
-      <button type="button" class="speed-pill" onclick="loadInstantSample('weightless_stillness', 'Weightless Stillness (Zen Meditation)')" style="font-size:11px; padding:4px 10px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.3); color:var(--text-2); cursor:pointer;">▶ Weightless Stillness</button>
-      <span style="font-size:10.5px; color:var(--text-3); margin-left:auto;">Zero wait · 1-click preview</span>
-    </div>
     <!-- Top Deck Bar: Status, Brand Equalizer, Title & Badges -->
     <div class="deck-top-bar">
       <div class="deck-identity">
@@ -1810,7 +1811,18 @@
 </div>
 
 <script>
-document.getElementById('duration').oninput = e => document.getElementById('durVal').textContent = e.target.value;
+document.getElementById('duration').oninput = e => {
+  const v = parseInt(e.target.value);
+  document.getElementById('durVal').textContent = v;
+  const hint = document.getElementById('durHint');
+  if (hint) {
+    if (v <= 20) hint.textContent = 'Quick 1-pass generation (~30\u201360s wait).';
+    else if (v <= 30) hint.textContent = 'Single-pass generation (~45\u201390s wait).';
+    else if (v <= 60) hint.textContent = 'Multi-pass synthesis \u2014 expect 2\u20134\u00d7 longer generation time.';
+    else if (v <= 120) hint.textContent = 'Extended multi-pass \u2014 4\u20138\u00d7 longer generation. Worth the wait!';
+    else hint.textContent = 'Long-form multi-pass synthesis \u2014 8\u00d7+ generation time. Perfect for deep sessions.';
+  }
+};
 
 let lastAudioUrl = null;
 let lastVideoUrl = null;
@@ -4292,48 +4304,7 @@ async function checkFrontDoorCapacity(userTriggered = false) {
 
 
 
-async function loadInstantSample(trackId, title) {
-  try {
-    const api = getApiEndpoint();
-    const url = `${api}/lounge/track?track=${encodeURIComponent(trackId)}`;
-    const statusLabel = document.getElementById('statusLabel');
-    if (statusLabel) statusLabel.textContent = `Loading: ${title}...`;
-    
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Sample not found');
-    const blob = await res.blob();
-    
-    const player = document.getElementById('player');
-    const playerWrap = document.getElementById('playerWrap');
-    if (lastAudioUrl) URL.revokeObjectURL(lastAudioUrl);
-    const blobUrl = URL.createObjectURL(blob);
-    lastAudioUrl = blobUrl;
-    if (player) player.src = blobUrl;
 
-    if (playerWrap) {
-      playerWrap.hidden = false;
-      requestAnimationFrame(() => playerWrap.classList.add('ready'));
-    }
-
-    if (player) {
-      player.play().catch(err => console.warn('[Tranquilicy] Instant sample play:', err));
-    }
-
-    if (statusLabel) statusLabel.textContent = `Showcase: ${title}`;
-    const trackTitleInput = document.getElementById('trackTitle');
-    if (trackTitleInput) trackTitleInput.value = title;
-
-    flow.generated = true;
-    renderFlow();
-    unlockExportSteps();
-    updateDownloadNames();
-    refreshPreview();
-
-    if (typeof buildWaveformFromBlob === 'function') buildWaveformFromBlob(blob);
-  } catch (err) {
-    console.warn('[Tranquilicy] Error loading instant sample:', err);
-  }
-}
 
 
 
