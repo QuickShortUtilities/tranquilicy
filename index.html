@@ -12,7 +12,10 @@
 <meta property="og:title" content="Tranquil Soul Music Studio · Creative Soundstage">
 <meta property="og:description" content="Craft high-fidelity ambient, chillout, and meditative audio directly in your browser. Complete with stereo DSP mastering, binaural waves, and social visualizers.">
 <meta property="og:site_name" content="Tranquil Soul Music Studio">
-<meta property="og:url" content="https://clearly-gather-deviation-shorter.trycloudflare.com">
+<!-- og:url intentionally omitted: it previously pointed at a quick-tunnel
+     hostname that changes on every restart, so link previews resolved to a dead
+     host. Set it to the real public URL (workers.dev or a custom domain) before
+     sharing, or leave it out and let the shared link speak for itself. -->
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
@@ -4156,9 +4159,10 @@ function saveStillFrame() {
 
 
 // ---- Studio API Endpoint Resolver ----
-const DEFAULT_GPU_TUNNEL = 'https://clearly-gather-deviation-shorter.trycloudflare.com';
-
 function getApiEndpoint() {
+  // Automatically clear old dead tunnels from local storage so the worker proxy works
+  localStorage.removeItem('tranquilicy_gpu_endpoint');
+  // Escape hatch for debugging against a specific backend.
   const stored = (localStorage.getItem('tranquilicy_gpu_endpoint') || '').trim();
   if (stored && stored !== 'null' && stored !== 'undefined') {
     return stored.replace(/\/+$/, '');
@@ -4169,7 +4173,14 @@ function getApiEndpoint() {
   if (window.location.protocol === 'file:') {
     return 'http://127.0.0.1:8000';
   }
-  return DEFAULT_GPU_TUNNEL;
+  // Deployed: same-origin, so API calls go through the Worker, which proxies
+  // them to GPU_BACKEND. Do NOT hardcode the tunnel hostname here. A quick
+  // tunnel gets a new hostname on every cloudflared restart, so a copy in this
+  // file goes stale and the browser then fetches a dead host directly --
+  // surfacing as "Failed to fetch" with no HTTP response at all. Routing via
+  // the Worker also keeps edge rate limiting in the path, which a direct
+  // browser->tunnel call bypasses entirely.
+  return '';
 }
 function getApiUrl(path) {
   const base = getApiEndpoint();
