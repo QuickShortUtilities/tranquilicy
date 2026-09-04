@@ -1,4 +1,4 @@
-// Served verbatim -- no placeholder substitution happens at the edge, so
+﻿// Served verbatim -- no placeholder substitution happens at the edge, so
 // index.html must be committed fully rendered. If `__APP_VERSION__` or
 // `__FORMAT_OPTIONS__` ever reappear in it, production shows a literal
 // "v__APP_VERSION__" footer and an empty Format dropdown.
@@ -11,7 +11,7 @@ import html from './index.html';
 // code change + commit + redeploy. Quick tunnels get a fresh random hostname
 // every time cloudflared restarts, so this WILL change; see
 // scripts/start_tunnel.ps1, which prints the new value on each start.
-const GPU_BACKEND_FALLBACK = 'https://investigated-farming-motorola-textiles.trycloudflare.com';
+const GPU_BACKEND_FALLBACK = 'https://butter-amd-docs-newark.trycloudflare.com';
 
 function backendFor(env) {
   const configured = env && typeof env.GPU_BACKEND === 'string' ? env.GPU_BACKEND.trim() : '';
