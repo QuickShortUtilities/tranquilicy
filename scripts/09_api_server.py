@@ -985,6 +985,120 @@ INDEX_HTML = """<!DOCTYPE html>
   @media (hover: none), (pointer: coarse) {
     #customCursorDot, #customCursorRing { display: none !important; }
   }
+
+  /* ---- Take Library Drawer ---- */
+  .take-library-section {
+    margin-top: 24px; padding: 20px; background: var(--bg-2);
+    border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--lift);
+  }
+  .take-library-head { margin-bottom: 14px; }
+  .take-tray {
+    display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px;
+    scrollbar-width: thin; scrollbar-color: var(--gold-deep) transparent;
+  }
+  .take-tray::-webkit-scrollbar { height: 6px; }
+  .take-tray::-webkit-scrollbar-thumb { background: var(--gold-deep); border-radius: 4px; }
+  .take-card {
+    flex: 0 0 220px; background: var(--bg-3); border: 1px solid var(--line);
+    border-radius: var(--radius-sm); padding: 12px; transition: all .2s var(--ease);
+    display: flex; flex-direction: column; gap: 8px; cursor: pointer;
+  }
+  .take-card:hover, .take-card.active {
+    border-color: var(--gold); background: var(--bg-4); transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(0,0,0,.4);
+  }
+  .take-card-title {
+    font-family: var(--display); font-size: 15px; font-weight: 500; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .take-card-meta {
+    font-size: 11px; color: var(--text-2); display: flex; justify-content: space-between;
+  }
+  .take-card-actions { display: flex; gap: 6px; margin-top: 4px; }
+  .take-btn-mini {
+    flex: 1; padding: 4px 8px; font-size: 10.5px; border-radius: 6px;
+    border: 1px solid var(--line); background: rgba(255,255,255,.05); color: var(--text);
+    cursor: pointer; transition: all .15s var(--ease); text-align: center;
+  }
+  .take-btn-mini:hover { background: var(--gold); color: var(--on-gold); border-color: var(--gold); }
+
+  /* ---- Interactive Waveform Timeline ---- */
+  .waveform-box {
+    margin-bottom: 14px; background: var(--bg-3); border: 1px solid var(--line);
+    border-radius: var(--radius-sm); padding: 12px 14px; position: relative;
+  }
+  .waveform-meta {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+    font-size: 11px; font-family: var(--ui);
+  }
+  .waveform-time { color: var(--text); font-weight: 500; }
+  .waveform-loop-tag {
+    color: var(--gold-text); background: rgba(193,166,115,.12); border: 1px solid rgba(193,166,115,.25);
+    padding: 2px 8px; border-radius: 999px; font-size: 10px; letter-spacing: .04em;
+  }
+  .waveform-track {
+    position: relative; width: 100%; height: 60px; background: rgba(0,0,0,.4);
+    border-radius: 6px; cursor: pointer; overflow: hidden; user-select: none;
+  }
+  #waveformCanvas { width: 100%; height: 100%; display: block; }
+  .waveform-playhead {
+    position: absolute; top: 0; bottom: 0; width: 2px; background: #fff;
+    box-shadow: 0 0 8px #fff; pointer-events: none; transform: translateX(-50%);
+    left: 0%; transition: left .05s linear;
+  }
+  .loop-bracket {
+    position: absolute; top: 0; bottom: 0; width: 14px; cursor: ew-resize;
+    display: flex; align-items: center; justify-content: center; z-index: 10;
+    touch-action: none;
+  }
+  .loop-bracket span {
+    font-size: 9px; font-weight: 700; color: #090807; background: var(--gold);
+    width: 13px; height: 16px; border-radius: 3px; display: flex; align-items: center;
+    justify-content: center; box-shadow: 0 0 6px var(--gold-glow);
+  }
+  .loop-bracket.handle-a { left: 0%; transform: translateX(0%); }
+  .loop-bracket.handle-b { left: 100%; transform: translateX(-100%); }
+  .loop-highlight {
+    position: absolute; top: 0; bottom: 0; left: 0%; width: 100%;
+    background: rgba(193,166,115,.08); pointer-events: none; border-left: 1px solid var(--gold);
+    border-right: 1px solid var(--gold);
+  }
+
+  /* ---- 4-Channel Soundscape Mixer Deck ---- */
+  .mixer-console {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0 16px;
+  }
+  .mixer-strip {
+    background: var(--bg-3); border: 1px solid var(--line); border-radius: var(--radius-sm);
+    padding: 12px 8px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+    transition: all .2s var(--ease);
+  }
+  .mixer-strip:hover { border-color: rgba(193,166,115,.3); }
+  .mixer-strip.muted { opacity: .45; }
+  .mixer-strip.soloed { border-color: var(--gold); box-shadow: 0 0 12px var(--gold-glow); }
+  .strip-name {
+    font-size: 11px; font-weight: 500; letter-spacing: .04em; color: var(--text);
+    white-space: nowrap; text-align: center;
+  }
+  .strip-btns { display: flex; gap: 4px; }
+  .strip-btn {
+    width: 22px; height: 20px; font-size: 9.5px; font-weight: 700; border-radius: 4px;
+    border: 1px solid var(--line); background: rgba(255,255,255,.05); color: var(--text-2);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all .15s var(--ease);
+  }
+  .strip-btn:hover { color: var(--text); background: rgba(255,255,255,.1); }
+  .strip-btn.mute-active { background: #EF4444; color: #fff; border-color: #EF4444; }
+  .strip-btn.solo-active { background: var(--gold); color: #090807; border-color: var(--gold); }
+  .strip-fader-wrap {
+    width: 100%; display: flex; justify-content: center; padding: 6px 0;
+  }
+  .strip-fader {
+    width: 90%; accent-color: var(--gold); cursor: pointer;
+  }
+  .strip-val { font-size: 10.5px; color: var(--gold-text); font-weight: 500; font-family: var(--ui); }
+
 </style>
 </head>
 <body>
@@ -1164,20 +1278,74 @@ INDEX_HTML = """<!DOCTYPE html>
       </select>
     </div>
 
-    <div class="section-label">Live Tone & Atmosphere</div>
+    <div class="section-label">4-Channel Soundscape Mixer Deck</div>
+    <div class="mixer-console" id="mixerConsole">
+      <!-- Channel 1: Music -->
+      <div class="mixer-strip" id="stripMusic">
+        <span class="strip-name">🎵 Music</span>
+        <div class="strip-btns">
+          <button type="button" class="strip-btn" id="muteMusicBtn" onclick="toggleMute('music')">M</button>
+          <button type="button" class="strip-btn" id="soloMusicBtn" onclick="toggleSolo('music')">S</button>
+        </div>
+        <div class="strip-fader-wrap">
+          <input type="range" class="strip-fader" id="volMusic" min="0" max="120" value="100" oninput="updateMixerVolumes()">
+        </div>
+        <div class="strip-val"><span id="volMusicVal">100</span>%</div>
+      </div>
+
+      <!-- Channel 2: Rain -->
+      <div class="mixer-strip" id="stripRain">
+        <span class="strip-name">🌧 Rain</span>
+        <div class="strip-btns">
+          <button type="button" class="strip-btn" id="muteRainBtn" onclick="toggleMute('rain')">M</button>
+          <button type="button" class="strip-btn" id="soloRainBtn" onclick="toggleSolo('rain')">S</button>
+        </div>
+        <div class="strip-fader-wrap">
+          <input type="range" class="strip-fader" id="volRain" min="0" max="100" value="0" oninput="updateMixerVolumes()">
+        </div>
+        <div class="strip-val"><span id="volRainVal">0</span>%</div>
+      </div>
+
+      <!-- Channel 3: Vinyl -->
+      <div class="mixer-strip" id="stripVinyl">
+        <span class="strip-name">📻 Vinyl</span>
+        <div class="strip-btns">
+          <button type="button" class="strip-btn" id="muteVinylBtn" onclick="toggleMute('vinyl')">M</button>
+          <button type="button" class="strip-btn" id="soloVinylBtn" onclick="toggleSolo('vinyl')">S</button>
+        </div>
+        <div class="strip-fader-wrap">
+          <input type="range" class="strip-fader" id="volVinyl" min="0" max="100" value="0" oninput="updateMixerVolumes()">
+        </div>
+        <div class="strip-val"><span id="volVinylVal">0</span>%</div>
+      </div>
+
+      <!-- Channel 4: Binaural Drone -->
+      <div class="mixer-strip" id="stripBinaural">
+        <span class="strip-name">🔮 Drone</span>
+        <div class="strip-btns">
+          <button type="button" class="strip-btn" id="muteBinauralBtn" onclick="toggleMute('binaural')">M</button>
+          <button type="button" class="strip-btn" id="soloBinauralBtn" onclick="toggleSolo('binaural')">S</button>
+        </div>
+        <div class="strip-fader-wrap">
+          <input type="range" class="strip-fader" id="volBinaural" min="0" max="100" value="0" oninput="updateMixerVolumes()">
+        </div>
+        <div class="strip-val"><span id="volBinauralVal">0</span>%</div>
+      </div>
+    </div>
+
+    <!-- Binaural / Solfeggio Preset Selector -->
     <div class="field">
       <div class="row" style="margin-top:0">
-        <label style="margin:0">Ambient Texture Layer</label>
-        <span class="val"><span id="ambientVolVal">30</span>%</span>
+        <label style="margin:0">Binaural Frequency Mode</label>
+        <span class="val" id="binauralFreqReadout">Alpha (10 Hz Focus)</span>
       </div>
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
-        <select id="ambientSelect" onchange="updateAmbientLayer()">
-          <option value="off">Off — Pure Music</option>
-          <option value="vinyl">Vintage Vinyl Crackle</option>
-          <option value="rain">Gentle Window Rain</option>
-        </select>
-        <input type="range" id="ambientVol" min="0" max="100" value="30" oninput="updateAmbientVol()">
-      </div>
+      <select id="binauralPreset" onchange="updateBinauralPreset()">
+        <option value="alpha" selected>Alpha Waves (10 Hz · Flow State & Focus)</option>
+        <option value="theta">Theta Waves (6 Hz · Deep Meditation & Zen)</option>
+        <option value="delta">Delta Waves (2.5 Hz · Restorative REM Sleep)</option>
+        <option value="solfeggio432">Solfeggio 432 Hz (Earth Harmony Resonance)</option>
+        <option value="solfeggio528">Solfeggio 528 Hz (Transformation Tone)</option>
+      </select>
     </div>
 
     <div class="field">
@@ -1261,7 +1429,7 @@ INDEX_HTML = """<!DOCTYPE html>
       <div class="field">
         <label>Format</label>
         <select id="exportFormat">
-          __FORMAT_OPTIONS__
+          <option value="WAV" selected>WAV — lossless, largest</option><option value="FLAC">FLAC — lossless, ~40% smaller</option><option value="OGG">OGG Vorbis — small</option><option value="MP3">MP3 — smallest, most portable</option>
         </select>
       </div>
       <button class="btn-primary" id="masterBtn" onclick="downloadMastered()">Master & Export Audio</button>
@@ -1394,6 +1562,26 @@ INDEX_HTML = """<!DOCTYPE html>
     </div>
 
     <div class="field">
+      <div class="row" style="margin-top:0">
+        <label style="margin:0">Video Export Length</label>
+        <span class="val" id="vidLoopEstVal">1x Loop</span>
+      </div>
+      <select id="vidLoops" onchange="updateVidLoopEst()">
+        <option value="1" selected>1x · Original Take (~20–60s)</option>
+        <option value="3">3x · Social Reel / Shorts Cut (~1–2 mins)</option>
+        <option value="5">5x · Mini Study Loop (~3–5 mins)</option>
+        <option value="10">10x · YouTube Extended Cut (~8–15 mins)</option>
+      </select>
+    </div>
+
+    <div class="section-label">Cinematic Video Overlays</div>
+    <div class="toggles">
+      <label class="toggle"><input type="checkbox" id="overlayEmbers" checked onchange="refreshPreview()"> Floating Stardust Embers</label>
+      <label class="toggle"><input type="checkbox" id="overlayTitleCard" checked onchange="refreshPreview()"> Intro Cinematic Title Card</label>
+      <label class="toggle"><input type="checkbox" id="overlayVignette" checked onchange="refreshPreview()"> Film Grain & Vignette Border</label>
+    </div>
+
+    <div class="field">
       <label>Watermark Position</label>
       <select id="watermarkPos">
         <option value="br">Bottom Right</option>
@@ -1441,6 +1629,17 @@ INDEX_HTML = """<!DOCTYPE html>
   </div>
   </div>
 
+  <!-- SESSION TAKES LIBRARY TRAY -->
+  <div class="take-library-section" id="takeLibrarySection" style="display:none">
+    <div class="take-library-head">
+      <div class="row" style="margin:0; align-items:center;">
+        <label style="margin:0; font-family:var(--display); font-size:17px; color:var(--gold-text); letter-spacing:.04em;">Session Takes Library (<span id="takeCount">0</span>)</label>
+        <span class="hint" style="margin:0">Instant 1-click A/B recall & downloads</span>
+      </div>
+    </div>
+    <div class="take-tray" id="takeTray"></div>
+  </div>
+
   <!-- OUTPUT CONTROL & ARTIFACT BAR -->
   <div class="card outbar" id="outbar">
     <div class="outbar-main">
@@ -1452,6 +1651,20 @@ INDEX_HTML = """<!DOCTYPE html>
       </div>
       <div id="barOuter"><div id="barInner"></div></div>
       <div id="playerWrap" hidden>
+        <!-- Interactive Waveform Timeline with A/B Loop Markers -->
+        <div class="waveform-box" id="waveformBox">
+          <div class="waveform-meta">
+            <span class="waveform-time"><span id="waveCurrentTime">0:00</span> / <span id="waveTotalTime">0:20</span></span>
+            <span class="waveform-loop-tag" id="loopTag">A-B Loop: <span id="loopAVal">0.0s</span> - <span id="loopBVal">20.0s</span></span>
+          </div>
+          <div class="waveform-track" id="waveformTrack" onclick="handleWaveformClick(event)">
+            <canvas id="waveformCanvas" width="800" height="60"></canvas>
+            <div class="waveform-playhead" id="waveformPlayhead"></div>
+            <div class="loop-bracket handle-a" id="loopHandleA" title="Loop Start (A)"><span>A</span></div>
+            <div class="loop-bracket handle-b" id="loopHandleB" title="Loop End (B)"><span>B</span></div>
+            <div class="loop-highlight" id="loopHighlight"></div>
+          </div>
+        </div>
         <audio id="player" controls></audio>
         <div class="player-tools">
           <div class="speed-group">
@@ -1474,7 +1687,7 @@ INDEX_HTML = """<!DOCTYPE html>
   </div>
 
   <div class="footer">
-    Tranquil Soul Music <span class="sep">·</span> Tranquilicy Studio <span class="sep">·</span> v__APP_VERSION__
+    Tranquil Soul Music <span class="sep">·</span> Tranquilicy Studio <span class="sep">·</span> v1.7.0
   </div>
 </div>
 
@@ -1793,6 +2006,8 @@ function drawStarChart() {
 buildDials();
 drawStarChart();
 setupStarChartDrag();
+if (typeof setupWaveformDrag === 'function') setupWaveformDrag();
+if (typeof hookPlayerTimeUpdate === 'function') hookPlayerTimeUpdate();
 
 // ---- Vibe Matrix & Archetypes ----
 const VIBE_CATEGORIES = {
@@ -2240,6 +2455,21 @@ async function generate() {
     updateDownloadNames();
     refreshPreview();
 
+    // Decode & render interactive waveform timeline
+    if (typeof buildWaveformFromBlob === 'function') buildWaveformFromBlob(blob);
+
+    // Store in Session Takes Library
+    if (typeof addSessionTake === 'function') {
+      addSessionTake({
+        id: currentJobId,
+        title: document.getElementById('trackTitle').value || 'Take #' + (sessionTakes.length + 1),
+        url: url,
+        blob: blob,
+        duration: dur,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      });
+    }
+
     // Scroll to player so user immediately sees results
     outbar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } catch (e) {
@@ -2280,18 +2510,43 @@ async function cancelGeneration() {
   cancelBtn.textContent = 'Cancel';
 }
 
-// ---- Audio Graph & Web Audio Tone Shaping ----
+// ---- Audio Graph, 4-Channel Soundscape Mixer & Binaural Engine ----
 let audioCtx = null, analyserNode = null, mediaStreamDest = null;
 let toneLowShelf = null, toneMidPeak = null, toneHighShelf = null;
 let lofiHighPass = null, lofiLowPass = null;
-let ambientSource = null, ambientGain = null, ambientBuffer = null;
+let musicGain = null, rainGain = null, vinylGain = null, binauralGain = null;
+let rainSource = null, vinylSource = null;
+let binauralLeftOsc = null, binauralRightOsc = null;
+
+// Mixer State: volume (0..1.2), mute, solo
+const mixer = {
+  music: { vol: 1.0, mute: false, solo: false },
+  rain: { vol: 0.0, mute: false, solo: false },
+  vinyl: { vol: 0.0, mute: false, solo: false },
+  binaural: { vol: 0.0, mute: false, solo: false }
+};
+
+// Binaural & Solfeggio Presets
+const BINAURAL_PRESETS = {
+  alpha: { base: 216, offset: 10, label: 'Alpha (10 Hz Focus)' },
+  theta: { base: 144, offset: 6, label: 'Theta (6 Hz Zen)' },
+  delta: { base: 108, offset: 2.5, label: 'Delta (2.5 Hz Sleep)' },
+  solfeggio432: { base: 432, offset: 0, label: 'Solfeggio 432 Hz' },
+  solfeggio528: { base: 528, offset: 0, label: 'Solfeggio 528 Hz' }
+};
 
 async function ensureAudioGraph() {
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const source = audioCtx.createMediaElementSource(document.getElementById('player'));
     
-    // EQ Filters
+    // Master Analyser & Recording Destination
+    analyserNode = audioCtx.createAnalyser();
+    analyserNode.fftSize = 1024;
+    analyserNode.smoothingTimeConstant = 0.82;
+    mediaStreamDest = audioCtx.createMediaStreamDestination();
+
+    // 1. Music Channel: Source -> EQ -> Lo-Fi -> Music Gain -> Analyser
     toneLowShelf = audioCtx.createBiquadFilter();
     toneLowShelf.type = 'lowshelf';
     toneLowShelf.frequency.value = 120;
@@ -2305,38 +2560,138 @@ async function ensureAudioGraph() {
     toneHighShelf.type = 'highshelf';
     toneHighShelf.frequency.value = 8000;
     
-    // Lo-Fi Bandpass
     lofiHighPass = audioCtx.createBiquadFilter();
     lofiHighPass.type = 'highpass';
-    lofiHighPass.frequency.value = 20; // bypass default
+    lofiHighPass.frequency.value = 20;
     
     lofiLowPass = audioCtx.createBiquadFilter();
     lofiLowPass.type = 'lowpass';
-    lofiLowPass.frequency.value = 20000; // bypass default
+    lofiLowPass.frequency.value = 20000;
 
-    analyserNode = audioCtx.createAnalyser();
-    analyserNode.fftSize = 1024;
-    analyserNode.smoothingTimeConstant = 0.82;
+    musicGain = audioCtx.createGain();
+    musicGain.gain.value = 1.0;
 
-    mediaStreamDest = audioCtx.createMediaStreamDestination();
-
-    // Wire player chain
     source.connect(toneLowShelf);
     toneLowShelf.connect(toneMidPeak);
     toneMidPeak.connect(toneHighShelf);
     toneHighShelf.connect(lofiHighPass);
     lofiHighPass.connect(lofiLowPass);
-    lofiLowPass.connect(analyserNode);
+    lofiLowPass.connect(musicGain);
+    musicGain.connect(analyserNode);
 
+    // 2. Procedural Rain Channel: BufferSource -> Rain Gain -> Analyser
+    rainGain = audioCtx.createGain();
+    rainGain.gain.value = 0.0;
+    const rainBuf = createRainBuffer(audioCtx);
+    rainSource = audioCtx.createBufferSource();
+    rainSource.buffer = rainBuf;
+    rainSource.loop = true;
+    rainSource.connect(rainGain);
+    rainGain.connect(analyserNode);
+    rainSource.start();
+
+    // 3. Procedural Vinyl Channel: BufferSource -> Vinyl Gain -> Analyser
+    vinylGain = audioCtx.createGain();
+    vinylGain.gain.value = 0.0;
+    const vinylBuf = createVinylBuffer(audioCtx);
+    vinylSource = audioCtx.createBufferSource();
+    vinylSource.buffer = vinylBuf;
+    vinylSource.loop = true;
+    vinylSource.connect(vinylGain);
+    vinylGain.connect(analyserNode);
+    vinylSource.start();
+
+    // 4. Stereo Binaural Drone: Left & Right Oscillators -> ChannelMerger -> Binaural Gain -> Analyser
+    const merger = audioCtx.createChannelMerger(2);
+    binauralLeftOsc = audioCtx.createOscillator();
+    binauralRightOsc = audioCtx.createOscillator();
+    binauralLeftOsc.type = 'sine';
+    binauralRightOsc.type = 'sine';
+    binauralGain = audioCtx.createGain();
+    binauralGain.gain.value = 0.0;
+
+    updateBinauralPreset();
+
+    binauralLeftOsc.connect(merger, 0, 0);  // Left channel
+    binauralRightOsc.connect(merger, 0, 1); // Right channel
+    merger.connect(binauralGain);
+    binauralGain.connect(analyserNode);
+
+    binauralLeftOsc.start();
+    binauralRightOsc.start();
+
+    // Master Output Routing
     analyserNode.connect(audioCtx.destination);
     analyserNode.connect(mediaStreamDest);
-
-    // Ambient noise node
-    ambientGain = audioCtx.createGain();
-    ambientGain.gain.value = 0.0;
-    ambientGain.connect(analyserNode);
   }
   if (audioCtx.state === 'suspended') await audioCtx.resume();
+}
+
+function updateMixerVolumes() {
+  ['music', 'rain', 'vinyl', 'binaural'].forEach(ch => {
+    const input = document.getElementById('vol' + ch.charAt(0).toUpperCase() + ch.slice(1));
+    const valSpan = document.getElementById('vol' + ch.charAt(0).toUpperCase() + ch.slice(1) + 'Val');
+    if (input && valSpan) {
+      mixer[ch].vol = parseFloat(input.value) / 100;
+      valSpan.textContent = input.value;
+    }
+  });
+
+  applyMixerGains();
+}
+
+function applyMixerGains() {
+  if (!audioCtx) return;
+  const anySolo = Object.values(mixer).some(m => m.solo);
+
+  const setChannel = (ch, gainNode) => {
+    if (!gainNode) return;
+    const m = mixer[ch];
+    let effective = m.vol;
+    if (m.mute || (anySolo && !m.solo)) {
+      effective = 0.0;
+    }
+    gainNode.gain.setTargetAtTime(effective, audioCtx.currentTime, 0.04);
+
+    const strip = document.getElementById('strip' + ch.charAt(0).toUpperCase() + ch.slice(1));
+    const muteBtn = document.getElementById('mute' + ch.charAt(0).toUpperCase() + ch.slice(1) + 'Btn');
+    const soloBtn = document.getElementById('solo' + ch.charAt(0).toUpperCase() + ch.slice(1) + 'Btn');
+    if (strip) {
+      strip.classList.toggle('muted', m.mute || (anySolo && !m.solo));
+      strip.classList.toggle('soloed', m.solo);
+    }
+    if (muteBtn) muteBtn.classList.toggle('mute-active', m.mute);
+    if (soloBtn) soloBtn.classList.toggle('solo-active', m.solo);
+  };
+
+  setChannel('music', musicGain);
+  setChannel('rain', rainGain);
+  setChannel('vinyl', vinylGain);
+  setChannel('binaural', binauralGain);
+}
+
+function toggleMute(ch) {
+  mixer[ch].mute = !mixer[ch].mute;
+  if (mixer[ch].mute) mixer[ch].solo = false;
+  applyMixerGains();
+}
+
+function toggleSolo(ch) {
+  mixer[ch].solo = !mixer[ch].solo;
+  if (mixer[ch].solo) mixer[ch].mute = false;
+  applyMixerGains();
+}
+
+function updateBinauralPreset() {
+  const presetKey = document.getElementById('binauralPreset').value;
+  const readout = document.getElementById('binauralFreqReadout');
+  const p = BINAURAL_PRESETS[presetKey] || BINAURAL_PRESETS.alpha;
+  if (readout) readout.textContent = p.label;
+
+  if (binauralLeftOsc && binauralRightOsc && audioCtx) {
+    binauralLeftOsc.frequency.setTargetAtTime(p.base, audioCtx.currentTime, 0.08);
+    binauralRightOsc.frequency.setTargetAtTime(p.base + p.offset, audioCtx.currentTime, 0.08);
+  }
 }
 
 function updateToneEq() {
@@ -2360,15 +2715,13 @@ function updateToneEq() {
   }
 }
 
-// Procedural Ambient Layers
+// Procedural Audio Generators
 function createVinylBuffer(ctx) {
   const sr = ctx.sampleRate, dur = 5;
   const buf = ctx.createBuffer(1, sr * dur, sr);
   const data = buf.getChannelData(0);
   for (let i = 0; i < data.length; i++) {
-    // subtle background hiss
     data[i] = (Math.random() * 2 - 1) * 0.012;
-    // random vinyl pops
     if (Math.random() < 0.00045) {
       data[i] = (Math.random() * 2 - 1) * 0.18;
     }
@@ -2383,124 +2736,281 @@ function createRainBuffer(ctx) {
   let lastOut = 0.0;
   for (let i = 0; i < data.length; i++) {
     const white = Math.random() * 2 - 1;
-    lastOut = (lastOut + (0.02 * white)) / 1.02; // pinking filter
+    lastOut = (lastOut + (0.02 * white)) / 1.02;
     data[i] = lastOut * 0.12;
-    if (Math.random() < 0.0008) {
-      data[i] += (Math.random() - 0.5) * 0.08;
-    }
   }
   return buf;
 }
 
-async function updateAmbientLayer() {
-  await ensureAudioGraph();
-  const mode = document.getElementById('ambientSelect').value;
-  if (ambientSource) {
-    try { ambientSource.stop(); } catch(e){}
-    ambientSource.disconnect();
-    ambientSource = null;
+// ---- Interactive Waveform Timeline Engine ----
+let waveformPeaks = [];
+let loopStartSec = 0.0, loopEndSec = 20.0;
+let isDraggingLoopHandle = null;
+
+async function buildWaveformFromBlob(blob) {
+  const canvas = document.getElementById('waveformCanvas');
+  if (!canvas || !blob) return;
+  try {
+    const ab = await blob.arrayBuffer();
+    const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuf = await tempCtx.decodeAudioData(ab);
+    const rawData = audioBuf.getChannelData(0);
+    const samples = 140;
+    const blockSize = Math.floor(rawData.length / samples);
+    waveformPeaks = [];
+    for (let i = 0; i < samples; i++) {
+      let sum = 0;
+      for (let j = 0; j < blockSize; j++) {
+        sum += Math.abs(rawData[i * blockSize + j]);
+      }
+      waveformPeaks.push(sum / blockSize);
+    }
+    const maxVal = Math.max(...waveformPeaks, 0.001);
+    waveformPeaks = waveformPeaks.map(p => p / maxVal);
+    
+    loopStartSec = 0.0;
+    loopEndSec = audioBuf.duration;
+    updateLoopUi();
+    drawTimelineWaveform();
+  } catch(e) {
+    console.warn('[Tranquilicy] Waveform decode error:', e);
   }
-  if (mode === 'off') {
-    ambientGain.gain.value = 0.0;
-    return;
-  }
-  const buf = mode === 'vinyl' ? createVinylBuffer(audioCtx) : createRainBuffer(audioCtx);
-  ambientSource = audioCtx.createBufferSource();
-  ambientSource.buffer = buf;
-  ambientSource.loop = true;
-  ambientSource.connect(ambientGain);
-  ambientSource.start();
-  updateAmbientVol();
 }
 
-function updateAmbientVol() {
-  const v = parseFloat(document.getElementById('ambientVol').value) / 100;
-  document.getElementById('ambientVolVal').textContent = Math.round(v * 100);
-  if (ambientGain) ambientGain.gain.value = v * 0.45;
-}
+function drawTimelineWaveform() {
+  const canvas = document.getElementById('waveformCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width = canvas.offsetWidth || 800;
+  const h = canvas.height = 60;
 
-// Player controls
-function setSpeed(s) {
-  const p = document.getElementById('player');
-  p.playbackRate = s;
-  ['075', '100', '125'].forEach(x => {
-    document.getElementById('speed' + x + 'Btn').classList.toggle('active', s === (x === '075' ? 0.75 : (x === '100' ? 1.0 : 1.25)));
+  ctx.clearRect(0, 0, w, h);
+  if (!waveformPeaks.length) return;
+
+  const barW = w / waveformPeaks.length;
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, '#F2EFE9');
+  grad.addColorStop(0.5, '#D4B97A');
+  grad.addColorStop(1, '#A58B58');
+
+  ctx.fillStyle = grad;
+  waveformPeaks.forEach((p, i) => {
+    const barH = Math.max(3, p * (h - 8));
+    const x = i * barW;
+    const y = (h - barH) / 2;
+    ctx.fillRect(x + 1, y, Math.max(1.5, barW - 1.5), barH);
   });
 }
 
-function togglePlayerLoop() {
-  const p = document.getElementById('player');
-  p.loop = !p.loop;
-  const btn = document.getElementById('playerLoopBtn');
-  btn.textContent = p.loop ? '🔁 Loop: On' : '🔁 Loop: Off';
-  btn.classList.toggle('active', p.loop);
+function handleWaveformClick(e) {
+  const track = document.getElementById('waveformTrack');
+  const player = document.getElementById('player');
+  if (!track || !player || !player.duration) return;
+  const rect = track.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  player.currentTime = pct * player.duration;
 }
 
-// Sliders and Mastering
-function bindSlider(id, valId) {
-  const el = document.getElementById(id), out = document.getElementById(valId);
-  const sync = () => { out.textContent = el.value; };
-  el.addEventListener('input', sync);
-  sync();
-}
-bindSlider('stereoWidth', 'widthVal');
-bindSlider('fadeIn', 'fadeInVal');
-bindSlider('fadeOut', 'fadeOutVal');
-bindSlider('masterWarmth', 'masterWarmthVal');
-bindSlider('masterAir', 'masterAirVal');
+function setupWaveformDrag() {
+  const track = document.getElementById('waveformTrack');
+  const handleA = document.getElementById('loopHandleA');
+  const handleB = document.getElementById('loopHandleB');
+  if (!track || !handleA || !handleB) return;
 
-const seamlessEl = document.getElementById('seamlessLoop');
-function syncSeamlessState() {
-  const fields = document.getElementById('fadeFields');
-  fields.inert = seamlessEl.checked;
-  fields.style.opacity = seamlessEl.checked ? '.35' : '1';
-}
-seamlessEl.addEventListener('change', syncSeamlessState);
-syncSeamlessState();
+  const onPointerDown = (handle, e) => {
+    isDraggingLoopHandle = handle;
+    handle.setPointerCapture(e.pointerId);
+    e.stopPropagation();
+    e.preventDefault();
+  };
 
-function humanSize(bytes) {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  handleA.addEventListener('pointerdown', e => onPointerDown('a', e));
+  handleB.addEventListener('pointerdown', e => onPointerDown('b', e));
+
+  const onPointerMove = e => {
+    if (!isDraggingLoopHandle) return;
+    const player = document.getElementById('player');
+    if (!player || !player.duration) return;
+    const rect = track.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const sec = pct * player.duration;
+
+    if (isDraggingLoopHandle === 'a') {
+      loopStartSec = Math.min(sec, loopEndSec - 0.5);
+    } else if (isDraggingLoopHandle === 'b') {
+      loopEndSec = Math.max(sec, loopStartSec + 0.5);
+    }
+    updateLoopUi();
+  };
+
+  const onPointerUp = () => { isDraggingLoopHandle = null; };
+
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
 }
 
+function updateLoopUi() {
+  const player = document.getElementById('player');
+  const dur = (player && player.duration) ? player.duration : 20.0;
+  const pctA = (loopStartSec / dur) * 100;
+  const pctB = (loopEndSec / dur) * 100;
+
+  const handleA = document.getElementById('loopHandleA');
+  const handleB = document.getElementById('loopHandleB');
+  const highlight = document.getElementById('loopHighlight');
+  const tag = document.getElementById('loopTag');
+
+  if (handleA) handleA.style.left = pctA + '%';
+  if (handleB) handleB.style.left = pctB + '%';
+  if (highlight) {
+    highlight.style.left = pctA + '%';
+    highlight.style.width = Math.max(0, pctB - pctA) + '%';
+  }
+  if (tag) {
+    const elA = document.getElementById('loopAVal');
+    const elB = document.getElementById('loopBVal');
+    if (elA) elA.textContent = loopStartSec.toFixed(1) + 's';
+    if (elB) elB.textContent = loopEndSec.toFixed(1) + 's';
+  }
+}
+
+function hookPlayerTimeUpdate() {
+  const player = document.getElementById('player');
+  const playhead = document.getElementById('waveformPlayhead');
+  const timeDisplay = document.getElementById('waveCurrentTime');
+  const totalDisplay = document.getElementById('waveTotalTime');
+
+  if (!player) return;
+
+  const fmtTime = s => {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec < 10 ? '0' : ''}${sec}`;
+  };
+
+  player.addEventListener('timeupdate', () => {
+    if (player.duration) {
+      const pct = (player.currentTime / player.duration) * 100;
+      if (playhead) playhead.style.left = pct + '%';
+      if (timeDisplay) timeDisplay.textContent = fmtTime(player.currentTime);
+      if (totalDisplay) totalDisplay.textContent = fmtTime(player.duration);
+
+      const isLooping = document.getElementById('playerLoopBtn') && document.getElementById('playerLoopBtn').classList.contains('active');
+      if (isLooping && player.currentTime >= loopEndSec) {
+        player.currentTime = loopStartSec;
+        player.play().catch(() => {});
+      }
+    }
+  });
+}
+
+// ---- Session Takes Library Tray ----
+const sessionTakes = [];
+
+function addSessionTake(take) {
+  sessionTakes.unshift(take);
+  const section = document.getElementById('takeLibrarySection');
+  const countEl = document.getElementById('takeCount');
+  const tray = document.getElementById('takeTray');
+
+  if (section) section.style.display = 'block';
+  if (countEl) countEl.textContent = sessionTakes.length;
+  if (!tray) return;
+
+  tray.innerHTML = '';
+  sessionTakes.forEach((t, idx) => {
+    const card = document.createElement('div');
+    card.className = 'take-card' + (idx === 0 ? ' active' : '');
+    card.innerHTML = `
+      <div class="take-card-title">${t.title || 'Take #' + (sessionTakes.length - idx)}</div>
+      <div class="take-card-meta">
+        <span>⏱ ${Math.round(t.duration)}s</span>
+        <span>${t.time}</span>
+      </div>
+      <div class="take-card-actions">
+        <button type="button" class="take-btn-mini" onclick="loadSessionTake(${idx})">▶ Load</button>
+        <a class="take-btn-mini" href="${t.url}" download="${(t.title || 'take').replace(/[\/:*?"<>|]/g, '')}.wav">💾 WAV</a>
+      </div>
+    `;
+    tray.appendChild(card);
+  });
+}
+
+function loadSessionTake(idx) {
+  const take = sessionTakes[idx];
+  if (!take) return;
+  const player = document.getElementById('player');
+  const playerWrap = document.getElementById('playerWrap');
+  const titleInput = document.getElementById('trackTitle');
+
+  lastAudioUrl = take.url;
+  player.src = take.url;
+  playerWrap.hidden = false;
+  requestAnimationFrame(() => playerWrap.classList.add('ready'));
+  player.play().catch(() => {});
+
+  if (titleInput && take.title) titleInput.value = take.title;
+  updateDownloadNames();
+  buildWaveformFromBlob(take.blob);
+  refreshPreview();
+
+  const cards = document.querySelectorAll('.take-card');
+  cards.forEach((c, i) => c.classList.toggle('active', i === idx));
+}
+
+function updateVidLoopEst() {
+  const sel = document.getElementById('vidLoops');
+  const span = document.getElementById('vidLoopEstVal');
+  const player = document.getElementById('player');
+  if (!sel || !span) return;
+  const factor = parseInt(sel.value) || 1;
+  const dur = (player && player.duration) ? player.duration : 20.0;
+  const totalSec = Math.round(dur * factor);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  span.textContent = `${factor}x Loop (~${m ? m + 'm ' : ''}${s}s)`;
+}
+
+// ---- Audio Mastering & Download Chain ----
 async function downloadMastered() {
   if (!currentJobId) return;
   const btn = document.getElementById('masterBtn');
-  const status = document.getElementById('masterStatus');
-  const fmt = document.getElementById('exportFormat').value;
-  const label = btn.textContent;
+  const statusEl = document.getElementById('masterStatus');
+  const format = document.getElementById('exportFormat').value;
   btn.disabled = true;
-  btn.textContent = 'Exporting...';
-  status.style.display = 'none';
+  statusEl.style.display = 'block';
+  statusEl.textContent = 'Processing master with analog saturation and loudness curve...';
+
+  const params = new URLSearchParams({
+    preset: document.getElementById('masterPreset').value,
+    width: document.getElementById('stereoWidth').value,
+    loop: document.getElementById('seamlessLoop').checked ? 'true' : 'false',
+    fade_in: document.getElementById('fadeIn').value,
+    fade_out: document.getElementById('fadeOut').value,
+    format: format,
+    warmth: document.getElementById('masterWarmth').value,
+    air: document.getElementById('masterAir').value
+  });
+
   try {
-    const params = new URLSearchParams({
-      preset: document.getElementById('masterPreset').value,
-      fmt,
-      width: (parseFloat(document.getElementById('stereoWidth').value) / 100).toFixed(3),
-      warmth: (parseFloat(document.getElementById('masterWarmth').value) / 100).toFixed(3),
-      air: (parseFloat(document.getElementById('masterAir').value) / 100).toFixed(3),
-      seamless: seamlessEl.checked ? 'true' : 'false',
-      fade_in: document.getElementById('fadeIn').value,
-      fade_out: document.getElementById('fadeOut').value,
-    });
     const res = await fetch(getApiUrl(`/master/${currentJobId}?${params}`));
-    if (!res.ok) throw new Error('Server error: ' + res.status);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Mastering failed with status ' + res.status);
+    }
     const blob = await res.blob();
     if (lastMasterUrl) URL.revokeObjectURL(lastMasterUrl);
     lastMasterUrl = URL.createObjectURL(blob);
-    lastMasterExt = fmt.toLowerCase();
-    setChip('masterChip', lastMasterUrl, buildFilename(lastMasterExt), `${fmt} · ${humanSize(blob.size)}`);
-    status.textContent = 'Ready in the bar below';
-    status.style.display = 'block';
+    lastMasterExt = format;
+
+    setChip('masterChip', lastMasterUrl, buildFilename(format));
+    statusEl.textContent = '✓ Master ready (' + format.toUpperCase() + ')';
     flow.mastered = true;
     renderFlow();
   } catch (e) {
-    status.textContent = 'Export failed: ' + e.message;
-    status.style.display = 'block';
+    statusEl.textContent = 'Mastering error: ' + e.message;
   } finally {
     btn.disabled = false;
-    btn.textContent = label;
   }
 }
 
@@ -2889,7 +3399,103 @@ function drawVinylDisc(ctx, w, h, t, bass) {
   ctx.restore();
 }
 
-function drawOverlays(ctx, w, h) {
+
+// ---- Cinematic Video Overlays: Embers, Title Card & Vignette ----
+const embers = [];
+function initEmbers(count = 45) {
+  embers.length = 0;
+  for (let i = 0; i < count; i++) {
+    embers.push({
+      x: Math.random() * 1280,
+      y: Math.random() * 720,
+      r: Math.random() * 2.2 + 0.8,
+      speedY: Math.random() * 0.6 + 0.2,
+      sway: Math.random() * 2.0 + 0.8,
+      phase: Math.random() * Math.PI * 2,
+      alpha: Math.random() * 0.6 + 0.2
+    });
+  }
+}
+initEmbers();
+
+function drawEmbers(ctx, w, h, time) {
+  ctx.save();
+  embers.forEach(e => {
+    e.y -= e.speedY;
+    e.x += Math.sin(time * 1.5 + e.phase) * (e.sway * 0.25);
+    if (e.y < -10) { e.y = h + 10; e.x = Math.random() * w; }
+    if (e.x < -10) e.x = w + 10;
+    if (e.x > w + 10) e.x = -10;
+
+    const pulse = 0.7 + 0.3 * Math.sin(time * 2 + e.phase);
+    ctx.fillStyle = `rgba(212, 185, 122, ${e.alpha * pulse})`;
+    ctx.shadowColor = 'rgba(212, 185, 122, 0.7)';
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.arc(e.x * (w / 1280), e.y * (h / 720), e.r * (w / 1280), 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function drawTitleCard(ctx, w, h, elapsedSec) {
+  if (elapsedSec > 4.5) return;
+  const progress = elapsedSec / 4.5;
+  let alpha = 1.0;
+  if (progress < 0.2) alpha = progress / 0.2;
+  else if (progress > 0.75) alpha = (1.0 - progress) / 0.25;
+
+  const title = (document.getElementById('trackTitle').value || 'Tranquil Soul').trim();
+  const artist = (document.getElementById('trackArtist').value || 'Tranquil Soul Music').trim();
+  const fontFam = document.getElementById('vidFont').value || 'Cinzel';
+
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const centerY = h * 0.42;
+  ctx.font = `300 ${Math.max(12, w * 0.016)}px "Space Grotesk", sans-serif`;
+  ctx.fillStyle = '#C1A673';
+  ctx.letterSpacing = '0.2em';
+  ctx.fillText(artist.toUpperCase(), w / 2, centerY - (w * 0.035));
+
+  ctx.font = `600 ${Math.max(20, w * 0.038)}px "${fontFam}", serif`;
+  ctx.fillStyle = '#F2EFE9';
+  ctx.shadowColor = 'rgba(0,0,0,0.85)';
+  ctx.shadowBlur = 16;
+  ctx.fillText(title, w / 2, centerY);
+
+  ctx.strokeStyle = '#C1A673';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(w / 2 - (w * 0.08), centerY + (w * 0.03));
+  ctx.lineTo(w / 2 + (w * 0.08), centerY + (w * 0.03));
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawVignetteAndGrain(ctx, w, h) {
+  ctx.save();
+  const grad = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(9,8,7,0.65)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+}
+
+
+function drawOverlays(ctx, w, h, t = 0) {
+  const embersCheck = document.getElementById('overlayEmbers');
+  const titleCardCheck = document.getElementById('overlayTitleCard');
+  const vignetteCheck = document.getElementById('overlayVignette');
+
+  if (embersCheck && embersCheck.checked) drawEmbers(ctx, w, h, t);
+  if (titleCardCheck && titleCardCheck.checked) drawTitleCard(ctx, w, h, t);
+  if (vignetteCheck && vignetteCheck.checked) drawVignetteAndGrain(ctx, w, h);
+
   const font = document.getElementById('vidFont').value;
   const title = document.getElementById('trackTitle').value.trim() || 'Untitled Chillout Track';
   const artist = document.getElementById('trackArtist').value.trim() || 'Tranquil Soul Music';
@@ -2992,7 +3598,7 @@ function drawExportFrame(t) {
   drawVinylDisc(ctx, w, h, t, bass);
   ctx.restore();
 
-  drawOverlays(ctx, w, h);
+  drawOverlays(ctx, w, h, t);
 }
 
 // Preview Synchronization
@@ -3093,10 +3699,32 @@ async function renderVideoInner(player, btn) {
   };
 
   const lengthMode = document.getElementById('vidLength').value;
+  const loopFactor = parseInt(document.getElementById('vidLoops') ? document.getElementById('vidLoops').value : '1') || 1;
   const fullDuration = isFinite(player.duration) && player.duration > 0 ? player.duration : 20;
-  let targetSec = fullDuration;
-  if (lengthMode === 'loop15') targetSec = Math.min(15, fullDuration);
-  if (lengthMode === 'loop30') targetSec = Math.min(30, fullDuration);
+  let singleLoopSec = fullDuration;
+  if (lengthMode === 'loop15') singleLoopSec = Math.min(15, fullDuration);
+  if (lengthMode === 'loop30') singleLoopSec = Math.min(30, fullDuration);
+
+  let targetSec = singleLoopSec * loopFactor;
+  let currentLoopIdx = 0;
+
+  const onTimeUpdate = () => {
+    if (player.currentTime >= singleLoopSec - 0.25) {
+      currentLoopIdx++;
+      if (currentLoopIdx < loopFactor) {
+        player.currentTime = 0;
+        player.play().catch(() => {});
+        setVidStatus(`Rendering loop ${currentLoopIdx + 1} of ${loopFactor} (Extended Cut)...`);
+      }
+    }
+  };
+  player.addEventListener('timeupdate', onTimeUpdate);
+
+  const origStop = stopEverything;
+  stopEverything = function() {
+    player.removeEventListener('timeupdate', onTimeUpdate);
+    origStop();
+  };
 
   player.currentTime = 0;
   recorder.start();
@@ -3107,7 +3735,7 @@ async function renderVideoInner(player, btn) {
     stopEverything();
     throw new Error('Could not start playback for recording');
   }
-  setTimeout(stopEverything, targetSec * 1000 + 300);
+  setTimeout(stopEverything, targetSec * 1000 + 400);
 }
 
 function saveStillFrame() {
