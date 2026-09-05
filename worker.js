@@ -1,4 +1,4 @@
-﻿// Served verbatim -- no placeholder substitution happens at the edge, so
+// Served verbatim -- no placeholder substitution happens at the edge, so
 // index.html must be committed fully rendered. If `__APP_VERSION__` or
 // `__FORMAT_OPTIONS__` ever reappear in it, production shows a literal
 // "v__APP_VERSION__" footer and an empty Format dropdown.
@@ -102,7 +102,7 @@ export default {
       const headers = new Headers(request.headers);
       headers.delete('host');
       if (clientIp) {
-        headers.set('CF-Connecting-IP', clientIp);
+        headers.set('X-Real-IP', clientIp);
       }
 
       const proxyInit = {

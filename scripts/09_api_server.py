@@ -120,6 +120,10 @@ def get_client_ip(request: Request) -> str:
     quota by claiming to be 127.0.0.1. Direct local callers have no CF header
     and fall through to the real socket address, which is what admin means.
     """
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    
     cf_ip = request.headers.get("cf-connecting-ip")
     if cf_ip:
         return cf_ip.strip()
