@@ -71,13 +71,13 @@ def gpu_status():
 #
 # Previous conservative values, to restore when the demo comes down:
 #   per-IP 2, downloads 3, queue 2, global/day 35
-MAX_GENERATIONS_PER_IP = 999999
-MAX_DOWNLOADS_PER_IP = 999999
-QUOTA_WINDOW_SEC = 86400.0   # 24 hours
+MAX_GENERATIONS_PER_IP = 4
+MAX_DOWNLOADS_PER_IP = 10
+QUOTA_WINDOW_SEC = 3600.0   # 1 hour
 # Queue depth is a wait-time budget, not a capacity dial: at ~55s a track,
 # position 6 waits ~5.5 min. Deeper than this and people abandon anyway, so
 # they are better served an honest "at capacity" than a queue they will leave.
-MAX_QUEUE_WAITING = 999999
+MAX_QUEUE_WAITING = 15
 # Circuit breaker: 400 x ~55s is ~6 GPU-hours/day worst case, which a 3090
 # handles comfortably (it throttles itself before anything is at risk) and
 # protects against a single script tying it up all day.
@@ -387,10 +387,10 @@ def generate(req: GenerateRequest, request: Request):
 
         # Check 2 generations limit for demo
         if q["generations"] >= MAX_GENERATIONS_PER_IP:
-            hours_left = max(1, int((QUOTA_WINDOW_SEC - (now - q["window_start"])) / 3600))
+            mins_left = max(1, int((QUOTA_WINDOW_SEC - (now - q["window_start"])) / 60))
             return JSONResponse(
                 status_code=429,
-                content={"detail": f"Demo limit reached ({MAX_GENERATIONS_PER_IP}/{MAX_GENERATIONS_PER_IP} tracks). Resets in ~{hours_left}h.", "code": "QUOTA_EXCEEDED"}
+                content={"detail": f"Demo limit reached ({MAX_GENERATIONS_PER_IP}/{MAX_GENERATIONS_PER_IP} tracks). Resets in ~{mins_left}m.", "code": "QUOTA_EXCEEDED"}
             )
         q["generations"] += 1
 
