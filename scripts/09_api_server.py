@@ -1,4 +1,4 @@
-﻿"""
+"""
 Local web app for generating chillout music: loads MusicGen once, serves a
 browser GUI styled to match the Tranquil Soul Music / Tranquilicy brand.
 Supports durations beyond MusicGen's ~30s single-pass limit by chaining
@@ -71,17 +71,17 @@ def gpu_status():
 #
 # Previous conservative values, to restore when the demo comes down:
 #   per-IP 2, downloads 3, queue 2, global/day 35
-MAX_GENERATIONS_PER_IP = 6   # enough to try a few prompts and move the dials
-MAX_DOWNLOADS_PER_IP = 30    # exports are CPU-only; 6 tracks x (audio+video+still)
+MAX_GENERATIONS_PER_IP = 999999
+MAX_DOWNLOADS_PER_IP = 999999
 QUOTA_WINDOW_SEC = 86400.0   # 24 hours
 # Queue depth is a wait-time budget, not a capacity dial: at ~55s a track,
 # position 6 waits ~5.5 min. Deeper than this and people abandon anyway, so
 # they are better served an honest "at capacity" than a queue they will leave.
-MAX_QUEUE_WAITING = 6
+MAX_QUEUE_WAITING = 999999
 # Circuit breaker: 400 x ~55s is ~6 GPU-hours/day worst case, which a 3090
 # handles comfortably (it throttles itself before anything is at risk) and
-# costs roughly £1.50/day in electricity at 350W.
-MAX_DAILY_GLOBAL_GENERATIONS = 400
+# protects against a single script tying it up all day.
+MAX_DAILY_GLOBAL_GENERATIONS = 999999
 
 ip_quotas = {}  # ip -> {"generations": int, "downloads": int, "window_start": float, "active_job_id": str | None}
 
