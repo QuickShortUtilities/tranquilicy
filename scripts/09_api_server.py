@@ -71,7 +71,7 @@ def gpu_status():
 #
 # Previous conservative values, to restore when the demo comes down:
 #   per-IP 2, downloads 3, queue 2, global/day 35
-MAX_GENERATIONS_PER_IP = 4
+MAX_GENERATIONS_PER_IP = 60
 MAX_DOWNLOADS_PER_IP = 10
 QUOTA_WINDOW_SEC = 3600.0   # 1 hour
 # Queue depth is a wait-time budget, not a capacity dial: at ~55s a track,
