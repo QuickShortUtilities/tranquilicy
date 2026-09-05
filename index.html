@@ -4027,7 +4027,14 @@ async function renderVideoInner(player, btn) {
 
   const canvasStream = canvas.captureStream(fps);
   const combined = new MediaStream([...canvasStream.getVideoTracks(), ...mediaStreamDest.stream.getAudioTracks()]);
-  const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm';
+  let mimeType = 'video/webm';
+  let ext = 'webm';
+  if (MediaRecorder.isTypeSupported('video/mp4')) {
+    mimeType = 'video/mp4';
+    ext = 'mp4';
+  } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+    mimeType = 'video/webm;codecs=vp9,opus';
+  }
   const recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: bitrate });
   const chunks = [];
   recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
@@ -4053,9 +4060,9 @@ async function renderVideoInner(player, btn) {
 
   recorder.onstop = () => {
     if (lastVideoUrl) URL.revokeObjectURL(lastVideoUrl);
-    const blob = new Blob(chunks, { type: 'video/webm' });
+    const blob = new Blob(chunks, { type: mimeType });
     lastVideoUrl = URL.createObjectURL(blob);
-    setChip('downloadVideoBtn', lastVideoUrl, buildFilename('webm'), `Video · ${humanSize(blob.size)}`);
+    setChip('downloadVideoBtn', lastVideoUrl, buildFilename(ext), `Video · ${humanSize(blob.size)}`);
     setVidStatus('Ready in the bar below');
     btn.disabled = false;
     flow.rendered = true;
