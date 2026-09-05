@@ -3119,10 +3119,19 @@ function skipAudio(deltaSec) {
 
 function setSpeed(spd) {
   const player = document.getElementById('player');
-  if (player) player.playbackRate = spd;
-  [0.75, 1.0, 1.25, 1.5].forEach(s => {
-    const btn = document.getElementById('speed' + String(s).replace('.', '') + 'Btn');
-    if (btn) btn.classList.toggle('active', s === spd);
+  if (player) {
+    player.playbackRate = spd;
+    player.defaultPlaybackRate = spd;
+  }
+  const speedMap = {
+    0.75: 'speed075Btn',
+    1.0: 'speed100Btn',
+    1.25: 'speed125Btn',
+    1.5: 'speed150Btn'
+  };
+  Object.keys(speedMap).forEach(s => {
+    const btn = document.getElementById(speedMap[s]);
+    if (btn) btn.classList.toggle('active', parseFloat(s) === spd);
   });
 }
 
