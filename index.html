@@ -1062,13 +1062,9 @@
       </div>
     </div>
     <div style="display:flex; gap:14px; align-items:center;">
-      <div class="gpu-badge" id="tickerBadge" style="cursor:default;">
-      <span class="gpu-dot" style="background:#C1A673; box-shadow: 0 0 10px rgba(193,166,115,.7);"></span>
-      <span id="tickerLabel">0 Tracks Crafted This Week</span>
-    </div>
       <div class="gpu-badge" id="gpuBadge" onclick="openGpuModal()">
       <span class="gpu-dot"></span>
-      <span id="gpuLabel">Tranquil Soul Studio · Online</span>
+      <span id="gpuLabel">Tranquil Soul Studio — Online</span>
     </div>
     </div>
   </div>
@@ -4211,10 +4207,6 @@ async function checkGpuStatus() {
       const data = await res.json();
       badge.className = 'gpu-badge online';
       label.textContent = `Tranquil Soul Studio — Online`;
-      if (data.total_generations !== undefined) {
-        const tLab = document.getElementById('tickerLabel');
-        if (tLab) tLab.textContent = data.total_generations + ' Tracks Crafted This Week';
-      }
       document.getElementById('gpuStatusText').textContent = `Tranquil Soul Studio — Online`;
       return true;
     }
