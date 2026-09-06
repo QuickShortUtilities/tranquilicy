@@ -72,7 +72,7 @@ def gpu_status():
 # Previous conservative values, to restore when the demo comes down:
 #   per-IP 2, downloads 3, queue 2, global/day 35
 MAX_GENERATIONS_PER_IP = 60
-MAX_DOWNLOADS_PER_IP = 10
+MAX_DOWNLOADS_PER_IP = 60   # exports; matches generations so everything you make can be exported
 QUOTA_WINDOW_SEC = 3600.0   # 1 hour
 # Queue depth is a wait-time budget, not a capacity dial: at ~55s a track,
 # position 6 waits ~5.5 min. Deeper than this and people abandon anyway, so
@@ -133,6 +133,28 @@ def get_client_ip(request: Request) -> str:
 
 def is_admin_ip(ip: str) -> bool:
     return ip in ("127.0.0.1", "::1", "localhost") or ip.startswith("192.168.") or ip.startswith("10.")
+
+
+def is_admin_request(request: Request) -> bool:
+    """Decide admin (unlimited GPU) from how the request ARRIVED, never from a
+    header value.
+
+    get_client_ip() reads x-real-ip / cf-connecting-ip, which is correct for
+    bucketing quotas -- the Worker sets x-real-ip from the Cloudflare-validated
+    client IP because CF masks cf-connecting-ip behind the Worker's own address.
+    But those are still just headers, so deciding *admin* from them let anyone
+    send `X-Real-IP: 127.0.0.1` and claim unlimited generations. (Confirmed
+    locally: that header alone flips the identity used for quotas.)
+
+    Any request that reached us through Cloudflare carries cf-connecting-ip,
+    which the edge sets and refuses to let clients supply, and cloudflared adds
+    it for tunnel traffic. Its ABSENCE is therefore the reliable signal that a
+    caller is genuinely local -- and a remote caller cannot strip it.
+    """
+    if request.headers.get("cf-connecting-ip") or request.headers.get("cf-ray"):
+        return False
+    host = (request.client.host if request.client else "") or ""
+    return is_admin_ip(host)
 
 def get_or_create_quota(ip: str) -> dict:
     now = time.time()
@@ -352,7 +374,7 @@ def run_job(job_id: str, prompt: str, duration_sec: float, guidance_scale: float
 def generate(req: GenerateRequest, request: Request):
     prune_old_jobs()
     ip = get_client_ip(request)
-    admin = is_admin_ip(ip)
+    admin = is_admin_request(request)
 
     global global_generations_today, global_window_start, total_generations
     now = time.time()
@@ -471,15 +493,13 @@ def result(job_id: str, request: Request):
     if job is None or job["audio"] is None:
         return JSONResponse({"error": "not ready"}, status_code=404)
     
-    ip = get_client_ip(request)
-    if not is_admin_ip(ip):
-        q = get_or_create_quota(ip)
-        if q["downloads"] >= MAX_DOWNLOADS_PER_IP:
-            return JSONResponse(
-                status_code=429,
-                content={"detail": f"Daily download limit ({MAX_DOWNLOADS_PER_IP}/{MAX_DOWNLOADS_PER_IP}) reached for this IP. Audio remains playable in browser."}
-            )
-        q["downloads"] += 1
+    # NOT rationed: the page fetches /result automatically after every
+    # generation to load the track into the player, so counting it against the
+    # download quota meant that once a visitor passed that limit their tracks
+    # generated fine but could never be heard -- while the error told them
+    # "audio remains playable in browser", which it was not. The generation
+    # quota already bounds how many results can exist. The explicit export
+    # (/master) is what carries the download quota.
 
     buf = io.BytesIO(job["audio"])
     return StreamingResponse(buf, media_type="audio/wav")
@@ -591,7 +611,7 @@ def apply_fades(audio: np.ndarray, file_sr: int, fade_in: float, fade_out: float
 @app.get("/capacity")
 def capacity(request: Request):
     ip = get_client_ip(request)
-    admin = is_admin_ip(ip)
+    admin = is_admin_request(request)
     waiting_jobs = [j for j in jobs.values() if not j["done"] and not j.get("started", False)]
     active_jobs = [j for j in jobs.values() if not j["done"]]
     global global_generations_today, global_window_start, total_generations
@@ -647,7 +667,7 @@ def lounge_track(track: str = "earth_pulse"):
 @app.get("/quota")
 def quota(request: Request):
     ip = get_client_ip(request)
-    admin = is_admin_ip(ip)
+    admin = is_admin_request(request)
     now = time.time()
     queue_len = len([j for j in jobs.values() if not j["done"]])
     if admin:
@@ -674,12 +694,24 @@ def quota(request: Request):
     }
 
 @app.get("/master/{job_id}")
-def master(job_id: str, preset: str = "streaming", fade_in: float = 0.0, fade_out: float = 0.0,
-           seamless: bool = False, width: float = 0.0, fmt: str = "WAV",
+def master(request: Request, job_id: str, preset: str = "streaming", fade_in: float = 0.0,
+           fade_out: float = 0.0, seamless: bool = False, width: float = 0.0, fmt: str = "WAV",
            warmth: float = 0.0, air: float = 0.0):
     job = jobs.get(job_id)
     if job is None or job["audio"] is None:
         return JSONResponse({"error": "not ready"}, status_code=404)
+
+    # The export is the thing worth rationing -- unlike /result, it is a
+    # deliberate action, and re-encoding is real CPU work.
+    if not is_admin_request(request):
+        q = get_or_create_quota(get_client_ip(request))
+        if q["downloads"] >= MAX_DOWNLOADS_PER_IP:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": f"Export limit reached ({MAX_DOWNLOADS_PER_IP}). "
+                                   f"Your tracks are still playable and downloadable as WAV."}
+            )
+        q["downloads"] += 1
 
     fmt = fmt.upper()
     if fmt not in AVAILABLE_FORMATS:

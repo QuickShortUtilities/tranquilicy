@@ -1813,8 +1813,69 @@
       <button type="button" class="btn-primary" style="margin:0; width:100%;" onclick="closeStudioNotice()">Understood</button>
     </div>
   </div>
+  <div id="termsModal" class="modal-overlay" style="display:none">
+    <div class="modal-card" style="max-width:620px; max-height:85vh; overflow-y:auto;">
+      <div class="card-head" style="margin-bottom:14px">
+        <span class="step-badge">§</span>
+        <div class="card-title">Terms &amp; Licence</div>
+      </div>
+
+      <div class="hint" style="font-size:13px; line-height:1.65; color:#FFF8E7;">
+        <p style="margin:0 0 14px"><strong style="color:var(--gold-text)">The music you make here is yours to use — free, forever, with credit.</strong></p>
+
+        <p style="margin:0 0 8px"><strong>Your licence</strong></p>
+        <p style="margin:0 0 14px">
+          Every track you generate is released to you under
+          <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener"
+             style="color:var(--gold-text)">Creative Commons BY-NC 4.0</a>.
+          You may keep it, share it, remix it, layer it into your own work, and use it in
+          videos, streams, games, installations and personal projects — anywhere that isn't
+          primarily commercial — provided you credit:
+        </p>
+        <p style="margin:0 0 14px; padding:10px 12px; background:var(--bg-3); border-radius:8px; border:1px solid var(--line);">
+          <em>Music generated with Tranquilicy Studio by Tranquil Soul Music</em>
+        </p>
+
+        <p style="margin:0 0 8px"><strong>Why non-commercial</strong></p>
+        <p style="margin:0 0 14px">
+          Tranquilicy is built on Meta's MusicGen, whose model weights are themselves released
+          under CC-BY-NC 4.0. We can't grant you broader rights than we hold, so we've matched
+          that licence rather than promise something we can't stand behind. Want to use a track
+          commercially? Get in touch and we'll sort it out with you directly.
+        </p>
+
+        <p style="margin:0 0 8px"><strong>The collective work</strong></p>
+        <p style="margin:0 0 14px">
+          Tracks generated here are kept, and at the end of this project they'll be woven
+          together into a single collective piece of art. By generating a track you're giving
+          Tranquil Soul Music permission to include it in that work. You keep your own licence
+          to your track regardless — this doesn't take anything away from you.
+        </p>
+
+        <p style="margin:0 0 8px"><strong>What we keep</strong></p>
+        <p style="margin:0 0 14px">
+          The audio you generate, and your IP address — the latter only to count generations so
+          one visitor can't monopolise a single graphics card. No accounts, no analytics, no
+          trackers, and nothing sold or passed to anyone else.
+        </p>
+
+        <p style="margin:0 0 8px"><strong>The honest small print</strong></p>
+        <p style="margin:0 0 18px">
+          This is a free demo running on one RTX 3090 in a spare room, so it may be slow,
+          queued, or offline entirely. Audio is machine-generated and provided as-is with no
+          warranty — and be aware that the copyright status of purely AI-generated audio is
+          still unsettled in many countries.
+        </p>
+      </div>
+
+      <button type="button" class="btn-primary" style="margin:0; width:100%;" onclick="closeTerms()">Got it</button>
+    </div>
+  </div>
+
   <div class="footer">
     Tranquil Soul Music <span class="sep">·</span> Tranquilicy Studio <span class="sep">·</span> v1.7.0
+    <span class="sep">·</span>
+    <a href="#" onclick="openTerms(); return false;" style="color:var(--gold-text); text-decoration:none;">Terms &amp; Licence</a>
   </div>
 
 <script>
@@ -4232,6 +4293,21 @@ async function checkGpuStatus() {
   document.getElementById('gpuStatusText').textContent = 'Connecting to studio engine...';
   return false;
 }
+
+function openTerms() {
+  document.getElementById('termsModal').style.display = 'flex';
+}
+function closeTerms() {
+  document.getElementById('termsModal').style.display = 'none';
+}
+// Close on backdrop click and Escape -- a modal with only one small button is
+// a trap on mobile, where the button can sit below the fold on a long read.
+document.getElementById('termsModal').addEventListener('click', e => {
+  if (e.target.id === 'termsModal') closeTerms();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeTerms();
+});
 
 function openGpuModal() {
   document.getElementById('gpuEndpointInput').value = getApiEndpoint();
