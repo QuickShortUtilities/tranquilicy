@@ -191,17 +191,14 @@ def main():
     check_brackets(script)
     check_deployable(page)
 
-    # The inline copy is only a fallback; warn when it has drifted far enough
-    # that serving it would give a noticeably different app.
+    # The server used to embed a duplicate copy of this page as a fallback. It
+    # drifted ~17k chars out of date, so a missing index.html silently served a
+    # stale app. It has been deleted; the server now fails loudly instead.
     if SERVER_FILE.is_file():
         src = SERVER_FILE.read_text(encoding="utf-8", errors="replace")
-        marker = 'INDEX_HTML = """'
-        if marker in src:
-            s = src.index(marker) + len(marker)
-            inline = src[s:src.index('"""', s)]
-            drift = abs(len(inline) - len(page))
-            print(f"  note: inline fallback differs from index.html by {drift} chars"
-                  f"{' (stale)' if drift > 2000 else ''}")
+        if 'INDEX_HTML = """' in src:
+            fail("the duplicate INDEX_HTML fallback is back in 09_api_server.py "
+                 "-- it goes stale and silently serves an old app")
 
     print("PASS" if not failures else f"FAILED ({len(failures)} issue(s))")
     sys.exit(1 if failures else 0)

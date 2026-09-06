@@ -358,6 +358,45 @@
   @keyframes unlockRise { from { opacity: .35; transform: translateY(12px); } to { opacity: 1; transform: none; } }
   @keyframes unlockSweep { to { transform: translateX(100%); } }
   .card-actions { margin-top: auto; padding-top: 14px; }
+
+  /* The d20 lives at the top of .card-actions, which is bottom-pinned, so it
+     fills the slack above Generate rather than pushing anything down. */
+  .d20-roll {
+    display: flex; align-items: center; gap: 14px; width: 100%;
+    margin: 0 0 12px; padding: 13px 16px; cursor: pointer; text-align: left;
+    background: linear-gradient(160deg, rgba(193,166,115,.10), rgba(193,166,115,.03));
+    border: 1px solid var(--line-hi); border-radius: var(--radius-sm);
+    font-family: var(--ui); color: var(--text-2);
+    transition: border-color .2s var(--ease), color .2s var(--ease), background .2s var(--ease);
+  }
+  .d20-roll:hover { border-color: var(--gold); color: var(--text); background: linear-gradient(160deg, rgba(193,166,115,.18), rgba(193,166,115,.06)); }
+  .d20-roll:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+  .d20-roll:active { transform: scale(.99); }
+  .d20-roll svg { width: 40px; height: 40px; flex: none; overflow: visible; }
+  .d20-body { fill: rgba(193,166,115,.10); stroke: var(--gold); stroke-width: 4; stroke-linejoin: round; }
+  .d20-face { fill: rgba(193,166,115,.20); stroke: var(--gold); stroke-width: 3; stroke-linejoin: round; }
+  .d20-edge { stroke: var(--gold); stroke-width: 2.5; opacity: .55; fill: none; }
+  .d20-num  { fill: var(--gold-text); font-family: var(--ui); font-size: 22px; font-weight: 600; }
+  .d20-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .d20-title { font-size: 12px; font-weight: 600; letter-spacing: .11em; text-transform: uppercase; color: var(--gold-text); }
+  .d20-sub { font-size: 11px; color: var(--text-3); letter-spacing: .02em; }
+  .d20-roll:hover .d20-body { fill: rgba(193,166,115,.18); }
+
+  /* tumble, not a flat spin -- the squash/skew sells it as a thrown die */
+  .d20-roll.rolling svg { animation: d20tumble .85s cubic-bezier(.2,.75,.25,1); }
+  .d20-roll.rolling .d20-num { animation: d20flicker .85s steps(1) ; }
+  @keyframes d20tumble {
+    0%   { transform: rotate(0deg) scale(1); }
+    35%  { transform: rotate(300deg) scale(1.22) skewX(-6deg); }
+    70%  { transform: rotate(560deg) scale(.94) skewX(3deg); }
+    100% { transform: rotate(720deg) scale(1); }
+  }
+  @keyframes d20flicker { 0%,100% { opacity: 1; } 20%,60% { opacity: .25; } 40%,80% { opacity: .8; } }
+  @media (prefers-reduced-motion: reduce) {
+    .d20-roll.rolling svg, .d20-roll.rolling .d20-num { animation: none; }
+  }
+  body.easy-view .d20-sub { color: var(--text-2); }
+  body.easy-view .d20-title { font-size: 13px; }
   
   /* ========================================================================= */
   /* GRAND MASTER AUDIO DECK & QUEUE RADAR (100x Luxury Edition)               */
@@ -1228,6 +1267,22 @@
     <div class="hint" id="durHint">Tracks over 30s use multi-pass synthesis — generation takes longer.</div>
 
     <div class="card-actions">
+      <button type="button" class="d20-roll" id="d20Roll" onclick="rollEverything()"
+              title="Roll a new prompt and re-cast all six sound dimensions">
+        <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+          <!-- d20 seen point-up: outer hex silhouette, central upward face,
+               and the three edges running out to the alternating vertices -->
+          <polygon class="d20-body" points="50,4 92,27 92,73 50,96 8,73 8,27"/>
+          <polygon class="d20-face" points="50,26 72,64 28,64"/>
+          <path class="d20-edge" d="M50,4 L50,26 M92,27 L72,64 M8,27 L28,64
+                                     M92,73 L72,64 M8,73 L28,64 M50,96 L50,64"/>
+          <text class="d20-num" x="50" y="56" text-anchor="middle">20</text>
+        </svg>
+        <span class="d20-text">
+          <span class="d20-title">Randomise Everything</span>
+          <span class="d20-sub">New prompt · all six dimensions re-cast</span>
+        </span>
+      </button>
       <button id="genBtn" class="btn-primary" onclick="generate()">Generate Track</button>
       <div id="genErrorNotice" class="gen-error-banner" style="display:none"></div>
     </div>
@@ -2410,6 +2465,32 @@ function alchemistPrompt() {
 
 function randomisePrompt() {
   alchemistPrompt();
+}
+
+// One press re-casts the whole creative surface: a fresh prompt and all six
+// dimensions. Deliberately does NOT touch duration or the negative guidance --
+// those express intent ("how long am I willing to wait", "I don't want drums")
+// rather than taste, and silently flipping them would feel like a malfunction.
+function rollEverything() {
+  const btn = document.getElementById('d20Roll');
+  if (btn) {
+    btn.classList.remove('rolling');
+    void btn.offsetWidth;          // restart the animation on repeat presses
+    btn.classList.add('rolling');
+    btn.addEventListener('animationend', () => btn.classList.remove('rolling'), { once: true });
+  }
+
+  alchemistPrompt();
+
+  // Bias away from the extremes: fully random dials mostly produce mush, so
+  // average two rolls, which centres the spread while still reaching the ends.
+  DIALS.forEach(d => {
+    const roll = (Math.random() * 100 + Math.random() * 100) / 2;
+    if (knobs[d.key]) knobs[d.key].set(roll);
+  });
+
+  if (typeof drawStarChart === 'function') drawStarChart();
+  if (typeof refreshPreview === 'function') refreshPreview();
 }
 
 function copyPrompt() {
