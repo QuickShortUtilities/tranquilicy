@@ -41,6 +41,14 @@ SEED_SEC = 3.0
 MIN_DURATION, MAX_DURATION = 3.0, 300.0
 JOB_TTL_SEC = 30 * 60  # prune finished jobs after this long so `jobs` doesn't grow forever
 
+# Every generated track is archived here -- it is the source material for the
+# planned collective artwork. Deliberately NOT on C:, which had ~42GB free
+# against a growth rate of ~3.4GB/day at full demand. Override with
+# TRANQUILICY_OUTPUT_DIR; falls back to a local folder if the drive is missing.
+OUTPUT_DIR = Path(os.environ.get("TRANQUILICY_OUTPUT_DIR", r"E:\tranquilicy_outputs"))
+if not OUTPUT_DIR.drive or not Path(OUTPUT_DIR.drive + "\\").exists():
+    OUTPUT_DIR = Path(__file__).resolve().parent.parent / "outputs"
+
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -355,13 +363,16 @@ def run_job(job_id: str, prompt: str, duration_sec: float, guidance_scale: float
         jobs[job_id]["progress"] = 1.0
         jobs[job_id]["done"] = True
         
-        # Save to disk
+        # Archive every track: this is the source material for the collective
+        # artwork, so it is deliberately kept rather than discarded with the job.
+        # Written to OUTPUT_DIR (see top of file) rather than the working
+        # directory -- at 60 generations/hour this grows ~3.4GB/day, which would
+        # fill the system drive within a week and take the server down with it.
         try:
-            os.makedirs("outputs", exist_ok=True)
-            with open(f"outputs/{job_id}.wav", "wb") as f:
-                f.write(audio_bytes)
-        except:
-            pass
+            OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+            (OUTPUT_DIR / f"{job_id}.wav").write_bytes(audio_bytes)
+        except Exception as e:
+            print(f"[warn] could not archive {job_id}: {e}")
     except Exception as e:
         import traceback
         print(f"[Tranquilicy] Job {job_id[:8]}: EXCEPTION {e}\n{traceback.format_exc()}", flush=True)

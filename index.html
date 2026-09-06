@@ -31,7 +31,12 @@
   :root {
     --gold: #C1A673; --gold-deep: #A58B58; --gold-text: #D4B97A; --gold-glow: rgba(193,166,115,.18); --on-gold: #fff;
     --bg: #090807; --bg-2: #100F0D; --bg-3: #181612; --bg-4: #221F1A;
-    --text: #F2EFE9; --text-2: #9A9188; --text-3: #524D48;
+    /* --text-3 was #524D48, which measured 2.29:1 against the card background:
+       it failed WCAG AA (4.5:1) and even the large-text floor (3:1). It is used
+       for every .hint, i.e. all the explanatory small print, so the text new
+       users most need to read was the least readable thing on the page.
+       #867E76 measures 4.80:1 and still reads as dimmer than --text-2. */
+    --text: #F2EFE9; --text-2: #9A9188; --text-3: #867E76;
     --line: rgba(255,255,255,.07); --line-soft: rgba(255,255,255,.045); --line-hi: rgba(255,255,255,.13);
     --display: "Cormorant Garamond", Georgia, serif;
     --ui: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -39,6 +44,58 @@
     --lift: 0 1px 3px rgba(0,0,0,.5), 0 12px 32px rgba(0,0,0,.6);
     --ease: cubic-bezier(.22,.61,.36,1); --ease-out: cubic-bezier(.16,1,.3,1);
   }
+  /* ---------------------------------------------------------------------
+     EASY VIEW: a high-contrast, larger-type, low-distraction mode.
+     Same layout and features -- only legibility changes. It raises every text
+     token to 12:1+ contrast, makes borders actually visible (the default
+     .07-alpha hairlines are near-invisible on many screens), bumps the
+     smallest type up, drops font-weight 300 (thin light-on-dark text is what
+     people usually mean by "hard to read"), and stops the moving background.
+     --------------------------------------------------------------------- */
+  body.easy-view {
+    --text: #FFFFFF;          /* 19.2:1 */
+    --text-2: #E6E1D8;        /* 14.7:1 */
+    --text-3: #D8D2C8;        /* 12.8:1 */
+    --gold-text: #F5DFA6;
+    --gold: #E0C68C;
+    --line: rgba(255,255,255,.30);
+    --line-soft: rgba(255,255,255,.20);
+    --line-hi: rgba(255,255,255,.48);
+    --bg-2: #14120F;
+    --bg-3: #1E1B16;
+  }
+  body.easy-view { font-weight: 400; }
+  body.easy-view .hint { font-size: 13.5px; line-height: 1.6; color: var(--text-3); }
+  body.easy-view label,
+  body.easy-view .section-label,
+  body.easy-view .dial-label { font-size: 12.5px; letter-spacing: .08em; color: var(--text-2); }
+  body.easy-view .card-hint { font-size: 14px; color: var(--text-2); }
+  body.easy-view select,
+  body.easy-view input[type=text],
+  body.easy-view textarea { font-size: 15px; font-weight: 400; }
+  body.easy-view .card { border-width: 1px; border-color: var(--line-hi); }
+  body.easy-view .btn-primary,
+  body.easy-view .btn-ghost,
+  body.easy-view .chip { font-size: 12.5px; font-weight: 600; letter-spacing: .1em; }
+  body.easy-view .btn-ghost,
+  body.easy-view .chip { color: var(--text); border-color: var(--line-hi); }
+  /* the drifting feathers and heavy glows are the main sources of visual noise */
+  body.easy-view #featherCanvas { display: none; }
+  body.easy-view * { text-shadow: none !important; }
+  body.easy-view .card { box-shadow: 0 2px 10px rgba(0,0,0,.5); }
+
+  .easy-toggle {
+    display: inline-flex; align-items: center; gap: 8px; margin-left: auto;
+    padding: 9px 15px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line-hi); background: transparent; color: var(--text-2);
+    font-family: var(--ui); font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .1em; white-space: nowrap;
+    transition: background .2s var(--ease), color .2s var(--ease), border-color .2s var(--ease);
+  }
+  .easy-toggle:hover { color: var(--text); border-color: var(--gold); }
+  .easy-toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+  body.easy-view .easy-toggle { background: var(--gold); color: #14120F; border-color: var(--gold); }
+
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--ui); font-weight: 300; overflow-x: hidden; }
   #featherCanvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
@@ -1062,6 +1119,11 @@
       </div>
     </div>
     <div style="display:flex; gap:14px; align-items:center;">
+      <button type="button" class="easy-toggle" id="easyToggle"
+              onclick="toggleEasyView()" aria-pressed="false"
+              title="Larger text and higher contrast">
+        <span aria-hidden="true">◑</span><span id="easyToggleLabel">Easy view</span>
+      </button>
       <div class="gpu-badge" id="gpuBadge" onclick="openGpuModal()">
       <span class="gpu-dot"></span>
       <span id="gpuLabel">Tranquil Soul Studio — Online</span>
@@ -1990,6 +2052,9 @@ function drawFeatherShape(ctx, size, colorTop, colorBottom, strokeStyle) {
 
   let last = performance.now();
   function loop(now) {
+    // Easy view hides this canvas; skip the particle maths and canvas work
+    // entirely rather than animating something nobody can see.
+    if (window.__featherPaused) { last = now; requestAnimationFrame(loop); return; }
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
     ctx.clearRect(0, 0, w, h);
@@ -4293,6 +4358,33 @@ async function checkGpuStatus() {
   document.getElementById('gpuStatusText').textContent = 'Connecting to studio engine...';
   return false;
 }
+
+// ---- Easy view: high contrast, larger type, no moving background ----
+function applyEasyView(on) {
+  document.body.classList.toggle('easy-view', on);
+  const btn = document.getElementById('easyToggle');
+  if (btn) {
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    document.getElementById('easyToggleLabel').textContent = on ? 'Easy view on' : 'Easy view';
+  }
+  // The feather canvas keeps animating even when hidden, so stop the work too.
+  window.__featherPaused = on;
+}
+function toggleEasyView() {
+  const on = !document.body.classList.contains('easy-view');
+  try { localStorage.setItem('tranquilicy_easy_view', on ? '1' : '0'); } catch (e) {}
+  applyEasyView(on);
+}
+(function initEasyView() {
+  let on = false;
+  try { on = localStorage.getItem('tranquilicy_easy_view') === '1'; } catch (e) {}
+  // Honour the OS-level accessibility preference for anyone who has set it.
+  try {
+    if (localStorage.getItem('tranquilicy_easy_view') === null &&
+        window.matchMedia('(prefers-contrast: more)').matches) on = true;
+  } catch (e) {}
+  applyEasyView(on);
+})();
 
 function openTerms() {
   document.getElementById('termsModal').style.display = 'flex';
